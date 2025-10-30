@@ -1,7 +1,8 @@
 import os, re, uuid, json, datetime as dt, logging
 from typing import Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, Query, Request
-from pydantic import BaseModel, BaseSettings
+from pydantic import BaseModel
+from pydantic_settings import BaseSettings
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
