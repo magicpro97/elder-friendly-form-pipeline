@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+{% for item in preview %}
+  <div class="row"><span class="label">{{ item.label }}:</span> {{ item.value }}</div>
+{% endfor %}
+<div class="footer">
+  <div>Ngày … tháng … năm …</div>
+  <div style="text-align:right">Người làm đơn (ký, ghi rõ họ tên)</div>
+</div>
+{% endblock %}

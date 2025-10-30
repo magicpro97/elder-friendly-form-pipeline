@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # Redis for session storage
+  redis:
+    image: redis:7-alpine
+    container_name: fastapi_form_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - form_network
+
+  # FastAPI application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi_form_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SESSION_TTL_SECONDS=3600
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./forms:/app/forms:ro
+      - ./templates:/app/templates:ro
+    networks:
+      - form_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/forms')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  form_network:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local
