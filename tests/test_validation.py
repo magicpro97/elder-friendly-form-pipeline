@@ -13,8 +13,9 @@ def test_validate_text_field_valid():
         "validators": [{"type": "length", "min": 2, "max": 50}]
     }
     
-    normalized, error = _validate_field("  john doe  ", field)
-    assert error is None
+    is_valid, error, normalized = _validate_field(field, "  john doe  ")
+    assert is_valid is True
+    assert error == ""
     assert normalized == "John Doe"
 
 
@@ -23,12 +24,12 @@ def test_validate_text_field_too_short():
     field = {
         "id": "name",
         "type": "text",
-        "validators": [{"type": "length", "min": 5}]
+        "validators": [{"type": "length", "min": 5, "max": 100}]
     }
     
-    normalized, error = _validate_field("Joe", field)
-    assert error is not None
-    assert "ít nhất 5 ký tự" in error
+    is_valid, error, normalized = _validate_field(field, "Joe")
+    assert is_valid is False
+    assert "Độ dài cần" in error
 
 
 def test_validate_text_field_too_long():
@@ -36,12 +37,12 @@ def test_validate_text_field_too_long():
     field = {
         "id": "name",
         "type": "text",
-        "validators": [{"type": "length", "max": 10}]
+        "validators": [{"type": "length", "min": 1, "max": 10}]
     }
     
-    normalized, error = _validate_field("A" * 20, field)
-    assert error is not None
-    assert "không quá 10 ký tự" in error
+    is_valid, error, normalized = _validate_field(field, "A" * 20)
+    assert is_valid is False
+    assert "Độ dài cần" in error
 
 
 def test_validate_numeric_field_valid():
@@ -52,8 +53,9 @@ def test_validate_numeric_field_valid():
         "validators": [{"type": "numeric_range", "min": 18, "max": 100}]
     }
     
-    normalized, error = _validate_field("25", field)
-    assert error is None
+    is_valid, error, normalized = _validate_field(field, "25")
+    assert is_valid is True
+    assert error == ""
     assert normalized == "25"
 
 
@@ -62,12 +64,12 @@ def test_validate_numeric_field_invalid():
     field = {
         "id": "age",
         "type": "number",
-        "validators": [{"type": "numeric_range", "min": 0}]
+        "validators": [{"type": "numeric_range", "min": 0, "max": 200}]
     }
     
-    normalized, error = _validate_field("not a number", field)
-    assert error is not None
-    assert "số" in error.lower()
+    is_valid, error, normalized = _validate_field(field, "not a number")
+    assert is_valid is False
+    assert "Cần số" in error
 
 
 def test_validate_numeric_field_out_of_range():
@@ -78,8 +80,8 @@ def test_validate_numeric_field_out_of_range():
         "validators": [{"type": "numeric_range", "min": 18, "max": 65}]
     }
     
-    normalized, error = _validate_field("100", field)
-    assert error is not None
+    is_valid, error, normalized = _validate_field(field, "100")
+    assert is_valid is False
     assert "18" in error and "65" in error
 
 
@@ -92,8 +94,9 @@ def test_validate_date_field_valid():
         "pattern": r"^\d{2}/\d{2}/\d{4}$"
     }
     
-    normalized, error = _validate_field("15/05/1990", field)
-    assert error is None
+    is_valid, error, normalized = _validate_field(field, "15/05/1990")
+    assert is_valid is True
+    assert error == ""
     assert normalized == "15/05/1990"
 
 
@@ -105,9 +108,9 @@ def test_validate_date_field_invalid_format():
         "pattern": r"^\d{2}/\d{2}/\d{4}$"
     }
     
-    normalized, error = _validate_field("1990-05-15", field)
-    assert error is not None
-    assert "dd/mm/yyyy" in error.lower()
+    is_valid, error, normalized = _validate_field(field, "1990-05-15")
+    assert is_valid is False
+    assert "chưa đúng" in error
 
 
 def test_validate_date_field_out_of_range():
@@ -118,8 +121,9 @@ def test_validate_date_field_out_of_range():
         "validators": [{"type": "date_range", "min": "1950-01-01", "max": "2000-12-31"}]
     }
     
-    normalized, error = _validate_field("01/01/1920", field)
-    assert error is not None
+    is_valid, error, normalized = _validate_field(field, "01/01/1920")
+    assert is_valid is False
+    assert "Ngày ngoài khoảng cho phép" in error
 
 
 def test_validate_email_field_valid():
@@ -130,8 +134,9 @@ def test_validate_email_field_valid():
         "validators": [{"type": "regex", "pattern": r"^[\w\.-]+@[\w\.-]+\.\w+$"}]
     }
     
-    normalized, error = _validate_field("test@example.com", field)
-    assert error is None
+    is_valid, error, normalized = _validate_field(field, "test@example.com")
+    assert is_valid is True
+    assert error == ""
 
 
 def test_validate_email_field_invalid():
@@ -142,8 +147,9 @@ def test_validate_email_field_invalid():
         "validators": [{"type": "regex", "pattern": r"^[\w\.-]+@[\w\.-]+\.\w+$"}]
     }
     
-    normalized, error = _validate_field("not-an-email", field)
-    assert error is not None
+    is_valid, error, normalized = _validate_field(field, "not-an-email")
+    assert is_valid is False
+    assert error != ""
 
 
 def test_normalizers_applied():
@@ -151,10 +157,10 @@ def test_normalizers_applied():
     field = {
         "id": "text",
         "type": "text",
-        "normalizers": ["strip_spaces", "upper_case"]
+        "normalizers": ["strip_spaces", "upper"]
     }
     
-    normalized, error = _validate_field("  hello world  ", field)
+    is_valid, error, normalized = _validate_field(field, "  hello world  ")
     assert normalized == "HELLO WORLD"
 
 
@@ -166,5 +172,5 @@ def test_multiple_normalizers():
         "normalizers": ["strip_spaces", "collapse_whitespace", "title_case"]
     }
     
-    normalized, error = _validate_field("  hello    world  ", field)
+    is_valid, error, normalized = _validate_field(field, "  hello    world  ")
     assert normalized == "Hello World"

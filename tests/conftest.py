@@ -1,14 +1,27 @@
 """Pytest configuration and fixtures."""
 import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock
 import fakeredis
+import sys
+import os
+
+# Set environment variable to skip Redis connection in tests
+os.environ['TESTING'] = 'true'
+
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture
 def mock_redis():
     """Mock Redis client for testing."""
     return fakeredis.FakeRedis(decode_responses=True)
+
+
+@pytest.fixture
+def session_manager(mock_redis):
+    """SessionManager with fake Redis."""
+    from app import SessionManager
+    return SessionManager(mock_redis, ttl=3600)
 
 
 @pytest.fixture
@@ -50,9 +63,9 @@ def client(mock_redis, mock_settings):
 def sample_form():
     """Sample form data for testing."""
     return {
-        "form_id": "test_form",
-        "title": "Test Form",
-        "aliases": ["test", "mẫu thử"],
+        "form_id": "don_xin_viec",
+        "title": "Đơn xin việc",
+        "aliases": ["xin việc", "apply job", "đơn tuyển dụng"],
         "fields": [
             {
                 "id": "full_name",
@@ -83,10 +96,23 @@ def sample_form():
 def sample_session():
     """Sample session data for testing."""
     return {
-        "form_id": "test_form",
+        "form_id": "don_xin_viec",
         "answers": {},
         "field_idx": 0,
-        "questions": ["Họ và tên của bác là gì ạ?"],
+        "questions": [
+            {
+                "name": "full_name",
+                "ask": "Họ và tên của bác là gì ạ?",
+                "reprompt": "Cháu chưa nghe rõ, bác nhắc lại họ và tên giúp cháu nhé.",
+                "example": None
+            },
+            {
+                "name": "birth_date",
+                "ask": "Ngày sinh của bác là ngày nào ạ?",
+                "reprompt": "Cháu chưa nghe rõ, bác nhắc lại ngày sinh giúp cháu nhé.",
+                "example": None
+            }
+        ],
         "stage": "ask",
         "pending": None
     }

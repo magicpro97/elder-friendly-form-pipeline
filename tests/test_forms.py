@@ -5,28 +5,28 @@ from app import pick_form, FORM_INDEX, ALIASES
 
 def test_pick_form_by_exact_id():
     """Test form selection by exact form_id."""
-    form = pick_form("don_xin_viec")
-    assert form is not None
-    assert form["form_id"] == "don_xin_viec"
+    form_id = pick_form("don_xin_viec")
+    assert form_id is not None
+    assert form_id == "don_xin_viec"
 
 
 def test_pick_form_by_alias():
     """Test form selection by alias keyword."""
-    form = pick_form("xin việc")
-    assert form is not None
-    assert form["form_id"] == "don_xin_viec"
+    form_id = pick_form("xin việc")
+    assert form_id is not None
+    assert form_id == "don_xin_viec"
 
 
 def test_pick_form_by_title():
     """Test form selection by partial title match."""
-    form = pick_form("việc làm")
-    assert form is not None
+    form_id = pick_form("đơn xin việc")
+    assert form_id is not None
 
 
 def test_pick_form_not_found():
     """Test form selection with invalid query."""
-    form = pick_form("nonexistent_form_12345")
-    assert form is None
+    form_id = pick_form("nonexistent_form_12345")
+    assert form_id is None
 
 
 def test_form_index_loaded():

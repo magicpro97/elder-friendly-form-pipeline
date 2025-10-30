@@ -84,7 +84,13 @@ def get_redis_client() -> redis.Redis:
         logger.error(f"Redis connection failed: {e}")
         raise HTTPException(503, "Session storage không khả dụng. Vui lòng thử lại sau.")
 
-redis_client = get_redis_client()
+# Skip Redis connection during testing
+if os.getenv('TESTING') == 'true':
+    import fakeredis
+    redis_client = fakeredis.FakeRedis(decode_responses=True)
+    logger.info("Using FakeRedis for testing")
+else:
+    redis_client = get_redis_client()
 
 # Session management
 class SessionManager:
