@@ -90,7 +90,7 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          railway up --detach
+          railway up --detach --service app || railway up --detach
 
       - name: Get deployment status
         env:
