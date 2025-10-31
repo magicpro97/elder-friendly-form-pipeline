@@ -21,11 +21,10 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application code (start.py is included here)
 COPY . .
 
-# Copy start script and make it executable
-COPY start.py /app/start.py
+# Make start script executable
 RUN chmod +x /app/start.py
 
 # Create non-root user
