@@ -24,9 +24,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code (start.py is included here)
 COPY . .
 
-# Make start script executable
-RUN chmod +x /app/start.py
-
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
@@ -40,4 +37,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Run the application - Railway sets PORT env var at runtime
 # We use exec form with python -m to avoid shell issues
-CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", 8000]
+CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
