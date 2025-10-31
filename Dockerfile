@@ -35,6 +35,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/forms')"
 
-# Run the application - Railway sets PORT env var at runtime
-# We use exec form with python -m to avoid shell issues
-CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0"]
+# Run via start.py to handle Railway's dynamic PORT env var
+CMD ["python", "start.py"]
