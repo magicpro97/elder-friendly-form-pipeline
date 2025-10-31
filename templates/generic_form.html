@@ -1,11 +1,69 @@
-{% extends "base.html" %}
-{% block content %}
+{% extends "base.html" %} {% block content %} {# Header section #} {% if style
+and style.header %}
+<div
+  class="form-header"
+  style="text-align: {{ style.header.align or 'center' }}; margin-bottom: 20px;"
+>
+  {% if style.header.organization %}
+  <div style="font-weight: bold; font-size: 14px">
+    {{ style.header.organization }}
+  </div>
+  {% endif %} {% if style.header.department %}
+  <div style="font-size: 13px">{{ style.header.department }}</div>
+  {% endif %} {% if style.header.address %}
+  <div style="font-size: 12px; font-style: italic">
+    {{ style.header.address }}
+  </div>
+  {% endif %}
+</div>
+{% endif %} {# Title section #} {% if style and style.title %}
+<h1
+  style="font-size: {{ style.title.font_size or '22pt' }};
+           font-weight: {{ style.title.font_weight or 'bold' }};
+           text-transform: {{ style.title.text_transform or 'none' }};
+           margin-bottom: {{ style.title.margin_bottom or '16px' }};
+           text-align: {{ style.title.align or 'center' }};"
+>
+  {{ style.title.text or title }}
+</h1>
+{% else %}
 <h1>{{ title }}</h1>
-{% for item in preview %}
-  <div class="row"><span class="label">{{ item.label }}:</span> {{ item.value }}</div>
-{% endfor %}
+{% endif %} {# Fields section #}
+<div
+  class="form-fields"
+  style="margin-top: {{ style.spacing.section_gap if style and style.spacing else '20px' }};"
+>
+  {% for item in preview %}
+  <div
+    class="row"
+    style="margin-bottom: {{ style.layout.field_spacing if style and style.layout else '8px' }};"
+  >
+    <span class="label">{{ item.label }}:</span> {{ item.value }}
+  </div>
+  {% endfor %}
+</div>
+
+{# Footer section #} {% if style and style.footer %}
+<div
+  class="footer"
+  style="margin-top: {{ style.spacing.section_gap if style and style.spacing else '36px' }};"
+>
+  {% if style.footer.show_date %}
+  <div>Ngày … tháng … năm …</div>
+  {% endif %} {% if style.footer.show_signature_lines and
+  style.footer.signature_labels %} {% for sig in style.footer.signature_labels
+  %}
+  <div style="text-align: {{ sig.position or 'right' }};">
+    {{ sig.label }}<br />
+    <span style="font-style: italic; font-size: 12px">(ký, ghi rõ họ tên)</span>
+  </div>
+  {% endfor %} {% else %}
+  <div style="text-align: right">Người làm đơn (ký, ghi rõ họ tên)</div>
+  {% endif %}
+</div>
+{% else %}
 <div class="footer">
   <div>Ngày … tháng … năm …</div>
-  <div style="text-align:right">Người làm đơn (ký, ghi rõ họ tên)</div>
+  <div style="text-align: right">Người làm đơn (ký, ghi rõ họ tên)</div>
 </div>
-{% endblock %}
+{% endif %} {% endblock %}

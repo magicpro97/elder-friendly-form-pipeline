@@ -51,9 +51,10 @@ logs/
 .pytest_cache/
 .coverage
 htmlcov/
+coverage.xml
+test_form_*.pdf
+test_pdf_*.pdf
+test_*_style.py
 
 # OS
 Thumbs.db
-coverage.xml
-htmlcov/
-test_form_*.pdf

@@ -88,7 +88,11 @@
             },
             "align": {
               "type": "string",
-              "enum": ["left", "center", "right"],
+              "enum": [
+                "left",
+                "center",
+                "right"
+              ],
               "default": "center"
             }
           }
@@ -105,18 +109,39 @@
             },
             "font_weight": {
               "type": "string",
-              "enum": ["normal", "bold", "100", "200", "300", "400", "500", "600", "700", "800", "900"]
+              "enum": [
+                "normal",
+                "bold",
+                "100",
+                "200",
+                "300",
+                "400",
+                "500",
+                "600",
+                "700",
+                "800",
+                "900"
+              ]
             },
             "text_transform": {
               "type": "string",
-              "enum": ["none", "uppercase", "lowercase", "capitalize"]
+              "enum": [
+                "none",
+                "uppercase",
+                "lowercase",
+                "capitalize"
+              ]
             },
             "margin_bottom": {
               "type": "string"
             },
             "align": {
               "type": "string",
-              "enum": ["left", "center", "right"]
+              "enum": [
+                "left",
+                "center",
+                "right"
+              ]
             }
           }
         },
@@ -125,7 +150,12 @@
           "properties": {
             "type": {
               "type": "string",
-              "enum": ["single-column", "two-column", "grid", "table"],
+              "enum": [
+                "single-column",
+                "two-column",
+                "grid",
+                "table"
+              ],
               "default": "single-column"
             },
             "columns": {
@@ -139,7 +169,11 @@
             },
             "label_position": {
               "type": "string",
-              "enum": ["top", "left", "inline"],
+              "enum": [
+                "top",
+                "left",
+                "inline"
+              ],
               "default": "top"
             },
             "label_width": {
@@ -222,7 +256,11 @@
                   },
                   "position": {
                     "type": "string",
-                    "enum": ["left", "center", "right"]
+                    "enum": [
+                      "left",
+                      "center",
+                      "right"
+                    ]
                   }
                 }
               }
@@ -292,7 +330,13 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["deskew", "denoise", "binarization", "contrast_enhancement", "rotation"]
+            "enum": [
+              "deskew",
+              "denoise",
+              "binarization",
+              "contrast_enhancement",
+              "rotation"
+            ]
           }
         },
         "field_regions": {
@@ -307,12 +351,25 @@
               "bbox": {
                 "type": "object",
                 "properties": {
-                  "x": {"type": "integer"},
-                  "y": {"type": "integer"},
-                  "width": {"type": "integer"},
-                  "height": {"type": "integer"}
+                  "x": {
+                    "type": "integer"
+                  },
+                  "y": {
+                    "type": "integer"
+                  },
+                  "width": {
+                    "type": "integer"
+                  },
+                  "height": {
+                    "type": "integer"
+                  }
                 },
-                "required": ["x", "y", "width", "height"]
+                "required": [
+                  "x",
+                  "y",
+                  "width",
+                  "height"
+                ]
               },
               "confidence": {
                 "type": "number",
@@ -500,11 +557,20 @@
             },
             "text_align": {
               "type": "string",
-              "enum": ["left", "center", "right", "justify"]
+              "enum": [
+                "left",
+                "center",
+                "right",
+                "justify"
+              ]
             },
             "input_style": {
               "type": "string",
-              "enum": ["underline", "box", "none"],
+              "enum": [
+                "underline",
+                "box",
+                "none"
+              ],
               "description": "Visual style of input area"
             },
             "show_border": {
@@ -533,10 +599,18 @@
             "bbox": {
               "type": "object",
               "properties": {
-                "x": {"type": "integer"},
-                "y": {"type": "integer"},
-                "width": {"type": "integer"},
-                "height": {"type": "integer"}
+                "x": {
+                  "type": "integer"
+                },
+                "y": {
+                  "type": "integer"
+                },
+                "width": {
+                  "type": "integer"
+                },
+                "height": {
+                  "type": "integer"
+                }
               }
             },
             "alternatives": {
@@ -545,8 +619,12 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "text": {"type": "string"},
-                  "confidence": {"type": "number"}
+                  "text": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "number"
+                  }
                 }
               }
             },

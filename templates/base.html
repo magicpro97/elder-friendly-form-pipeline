@@ -1,16 +1,42 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="vi">
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 16pt; line-height: 1.6; }
-    h1 { font-size: 22pt; text-align:center; margin-bottom: 16px; }
-    .row { margin: 8px 0; }
-    .label { font-weight: bold; }
-    .footer { margin-top: 36px; display: flex; justify-content: space-between; }
-  </style>
-</head>
-<body>
-  {% block content %}{% endblock %}
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        font-family: {{ style.fonts.family if style and style.fonts else 'DejaVu Sans, Arial, sans-serif' }};
+        font-size: {{ style.fonts.body_size if style and style.fonts else '16pt' }};
+        line-height: 1.6;
+        color: {{ style.colors.text if style and style.colors else '#000' }};
+        background: {{ style.colors.background if style and style.colors else '#fff' }};
+        margin: {{ style.spacing.page_margin if style and style.spacing else '40px' }};
+      }
+      h1 {
+        font-size: 22pt;
+        text-align: center;
+        margin-bottom: 16px;
+        color: {{ style.colors.primary if style and style.colors else '#000' }};
+      }
+      .row {
+        margin: 8px 0;
+        padding: 6px 0;
+        border-bottom: 1px solid {{ style.colors.border if style and style.colors else '#e5e7eb' }};
+      }
+      .label {
+        font-weight: bold;
+        font-size: {{ style.fonts.label_size if style and style.fonts else '14pt' }};
+      }
+      .footer {
+        margin-top: 36px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .form-header {
+        margin-bottom: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    {% block content %}{% endblock %}
+  </body>
 </html>

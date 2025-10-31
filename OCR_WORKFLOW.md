@@ -7,6 +7,7 @@ This document describes the workflow for processing scanned physical forms using
 ## Workflow Steps
 
 ### 1. Form Scanning
+
 - **Input**: Physical paper form
 - **Process**: Scan using scanner or mobile camera
 - **Output**: Image file (PDF, PNG, JPG)
@@ -16,6 +17,7 @@ This document describes the workflow for processing scanned physical forms using
   - Format: PDF for multi-page, PNG for single page
 
 ### 2. Image Preprocessing
+
 Clean up the scanned image for better OCR accuracy:
 
 ```python
@@ -28,15 +30,18 @@ preprocessing_steps = [
 ```
 
 ### 3. OCR Extraction
+
 Extract text and layout information:
 
 **OCR Engines Supported:**
+
 - Google Vision API (recommended for Vietnamese)
 - Azure Computer Vision
 - Tesseract OCR
 - AWS Textract
 
 **Example using Google Vision API:**
+
 ```python
 from google.cloud import vision
 
@@ -61,9 +66,11 @@ def ocr_form(image_path):
 ```
 
 ### 4. Form Structure Detection
+
 Identify form components:
 
 **Components to detect:**
+
 - Header (organization name, logo, address)
 - Title
 - Field labels and input areas
@@ -71,12 +78,14 @@ Identify form components:
 - Footer notes
 
 **Detection methods:**
+
 1. **Text pattern matching**: Detect labels using regex patterns
 2. **Layout analysis**: Identify input areas by whitespace/boxes
 3. **Line detection**: Find underlines and boxes indicating input fields
 4. **Template matching**: Match against known form templates
 
 ### 5. Field Mapping
+
 Map detected text to form fields:
 
 ```json
@@ -92,9 +101,11 @@ Map detected text to form fields:
 ```
 
 ### 6. JSON Generation
+
 Generate form definition JSON:
 
 **Structure includes:**
+
 1. **Form metadata**: ID, title, aliases
 2. **Style information**: Layout, colors, fonts, spacing
 3. **OCR metadata**: Source file, confidence, dimensions
@@ -102,6 +113,7 @@ Generate form definition JSON:
 5. **Field OCR data**: Extracted text, confidence, bbox, alternatives
 
 **Example output:**
+
 ```json
 {
   "form_id": "don_nhan_luong_huu",
@@ -136,22 +148,26 @@ Generate form definition JSON:
 ```
 
 ### 7. Quality Assurance
+
 Review and validate OCR results:
 
 **Automated checks:**
+
 - Confidence score thresholds
 - Field validation rules
 - Pattern matching for known field types
 
 **Manual review triggers:**
+
 - `confidence < 0.85`: Flag for review
 - `requires_review: true`: Fields with ambiguous OCR
 - Validation failures: Fields that don't match expected patterns
 
 ### 8. Human Review Interface
+
 For low-confidence fields:
 
-```
+```text
 Field: Số CCCD/CMND
 OCR Result: 079058001234 (confidence: 0.89)
 Alternatives:
@@ -289,18 +305,21 @@ if __name__ == '__main__':
 ## Best Practices
 
 ### 1. Scanning Quality
+
 - Use **300 DPI** minimum for text documents
 - Ensure good **lighting** (no shadows)
 - Keep form **flat** (no wrinkles/folds)
 - Use **color/grayscale** to preserve form structure
 
 ### 2. OCR Accuracy
+
 - **Vietnamese language**: Use Google Vision API or Azure (better Unicode support)
 - **Numbers**: Verify with regex patterns (CCCD, phone numbers)
 - **Dates**: Parse with strict format validation
 - **Handwriting**: Use specialized models (lower accuracy, requires review)
 
 ### 3. Confidence Thresholds
+
 ```python
 CONFIDENCE_LEVELS = {
     'high': 0.95,      # Auto-accept
@@ -311,11 +330,13 @@ CONFIDENCE_LEVELS = {
 ```
 
 ### 4. Error Handling
+
 - **Common OCR errors**: O/0, l/I/1, S/5, B/8
 - **Validation**: Apply field validators to catch errors
 - **Alternatives**: Keep top 3 OCR alternatives for review
 
 ### 5. Style Extraction
+
 ```python
 # Extract layout from detected elements
 layout_type = detect_layout(blocks)  # single-column, two-column, grid
@@ -400,12 +421,14 @@ def render_form_preview(form, answers):
 ## Tools & Resources
 
 ### OCR Services
+
 - [Google Cloud Vision API](https://cloud.google.com/vision/docs/ocr)
 - [Azure Computer Vision](https://azure.microsoft.com/en-us/services/cognitive-services/computer-vision/)
 - [AWS Textract](https://aws.amazon.com/textract/)
 - [Tesseract OCR](https://github.com/tesseract-ocr/tesseract)
 
 ### Python Libraries
+
 - `google-cloud-vision`: Google Vision API client
 - `opencv-python`: Image preprocessing
 - `Pillow`: Image manipulation
@@ -413,6 +436,7 @@ def render_form_preview(form, answers):
 - `pdf2image`: PDF to image conversion
 
 ### Form Template Libraries
+
 - Government forms database
 - Common business forms
 - Healthcare forms

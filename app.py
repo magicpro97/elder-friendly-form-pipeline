@@ -615,7 +615,7 @@ def export_pdf(request: Request, session_id: str):
             st["preview"] = [{"label": f["label"], "value": st["answers"].get(f["name"], "")} for f in form["fields"]]
 
         tpl = env.get_template(settings.pdf_template)
-        html = tpl.render(title=form["title"], preview=st["preview"])
+        html = tpl.render(title=form["title"], preview=st["preview"], style=form.get("style", {}))
 
         logger.info(f"Session {session_id}: Generating PDF for form {fid}")
         from weasyprint import HTML
