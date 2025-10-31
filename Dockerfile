@@ -31,13 +31,13 @@ RUN chmod +x /app/start.py
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Expose port (Railway provides PORT env var)
+# Expose port (Railway will auto-assign PORT)
 EXPOSE 8000
-ENV PORT=8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/forms')"
 
-# Run the application using the Python start script
-CMD ["python", "/app/start.py"]
+# Run the application - Railway sets PORT env var at runtime
+# We use exec form with python -m to avoid shell issues
+CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
