@@ -109,21 +109,31 @@ def get_redis_client() -> redis.Redis:
             )
             logger.info(f"Connected to Redis at {settings.redis_host}:{settings.redis_port}")
 
-        client.ping()  # Test connection
+        # Don't test connection on startup - let it fail lazily
+        # client.ping() would block app startup if Redis not ready
         return client
     except redis.ConnectionError as e:
         logger.error(f"Redis connection failed: {e}")
         raise HTTPException(503, "Session storage không khả dụng. Vui lòng thử lại sau.") from e
 
 
-# Skip Redis connection during testing
-if os.getenv("TESTING") == "true":
-    import fakeredis
+# Initialize Redis client (lazy loading to avoid startup crashes)
+redis_client = None
 
-    redis_client = fakeredis.FakeRedis(decode_responses=True)
-    logger.info("Using FakeRedis for testing")
-else:
-    redis_client = get_redis_client()
+
+def get_redis():
+    """Get or create Redis client (lazy initialization)"""
+    global redis_client
+    if redis_client is None:
+        # Skip Redis connection during testing
+        if os.getenv("TESTING") == "true":
+            import fakeredis
+
+            redis_client = fakeredis.FakeRedis(decode_responses=True)
+            logger.info("Using FakeRedis for testing")
+        else:
+            redis_client = get_redis_client()
+    return redis_client
 
 
 # Session management
@@ -177,7 +187,16 @@ class SessionManager:
             self.redis.expire(key, self.ttl)
 
 
-session_manager = SessionManager(redis_client, settings.session_ttl_seconds)
+# Initialize session manager (will use lazy Redis client)
+session_manager = None
+
+
+def get_session_manager():
+    """Get or create session manager (lazy initialization)"""
+    global session_manager
+    if session_manager is None:
+        session_manager = SessionManager(get_redis(), settings.session_ttl_seconds)
+    return session_manager
 
 
 def get_client():
@@ -386,7 +405,7 @@ def start_session(request: Request, req: StartReq):
                 questions.append({"name": f["name"], "ask": ask, "reprompt": reprompt, "example": ex or None})
 
         session_data["questions"] = questions
-        session_manager.create(sid, session_data)
+        get_session_manager().create(sid, session_data)
 
         first = questions[0]
         first_field = form_meta["fields"][0]
@@ -457,7 +476,7 @@ def _validate_field(field, value):
 def question_next(request: Request, inp: TurnIn):
     """Get next question for session"""
     try:
-        st = session_manager.get(inp.session_id)
+        st = get_session_manager().get(inp.session_id)
         if not st:
             raise HTTPException(404, "Session không tồn tại hoặc đã hết hạn.")
 
@@ -485,7 +504,7 @@ def question_next(request: Request, inp: TurnIn):
 def answer_field(request: Request, inp: AnswerReq):
     """Process answer for current field"""
     try:
-        st = session_manager.get(inp.session_id)
+        st = get_session_manager().get(inp.session_id)
         if not st:
             raise HTTPException(404, "Session không tồn tại hoặc đã hết hạn.")
 
@@ -506,11 +525,11 @@ def answer_field(request: Request, inp: AnswerReq):
 
             if st["field_idx"] >= len(fields):
                 st["stage"] = "review"
-                session_manager.update(inp.session_id, st)
+                get_session_manager().update(inp.session_id, st)
                 logger.info(f"Session {inp.session_id}: All fields completed")
                 return {"ok": True, "done": True, "message": "Đã đủ thông tin. Bạn có thể xem trước."}
 
-            session_manager.update(inp.session_id, st)
+            get_session_manager().update(inp.session_id, st)
             nxt = st["questions"][st["field_idx"]]
             logger.info(f"Session {inp.session_id}: Skipped optional field {field['name']}")
             return {"ok": True, "ask": nxt["ask"], "field": nxt["name"], "example": nxt.get("example")}
@@ -540,7 +559,7 @@ def answer_field(request: Request, inp: AnswerReq):
                 if g.get("is_suspicious"):
                     st["pending"] = {"value": norm_val}
                     st["stage"] = "confirm"
-                    session_manager.update(inp.session_id, st)
+                    get_session_manager().update(inp.session_id, st)
                     logger.info(f"Session {inp.session_id}: Suspicious value detected, requesting confirmation")
                     return {
                         "ok": True,
@@ -557,11 +576,11 @@ def answer_field(request: Request, inp: AnswerReq):
 
         if st["field_idx"] >= len(fields):
             st["stage"] = "review"
-            session_manager.update(inp.session_id, st)
+            get_session_manager().update(inp.session_id, st)
             logger.info(f"Session {inp.session_id}: All fields completed")
             return {"ok": True, "done": True, "message": "Đã đủ thông tin. Bạn có thể xem trước."}
 
-        session_manager.update(inp.session_id, st)
+        get_session_manager().update(inp.session_id, st)
         nxt = st["questions"][st["field_idx"]]
         next_field = fields[st["field_idx"]]
         logger.debug(f"Session {inp.session_id}: Answer accepted, moving to next field")
@@ -585,7 +604,7 @@ def answer_field(request: Request, inp: AnswerReq):
 def confirm(request: Request, session_id: str = Query(...), yes: bool = Query(True)):
     """Confirm or reject suspicious value"""
     try:
-        st = session_manager.get(session_id)
+        st = get_session_manager().get(session_id)
         if not st:
             raise HTTPException(404, "Session không tồn tại hoặc đã hết hạn.")
 
@@ -605,11 +624,11 @@ def confirm(request: Request, session_id: str = Query(...), yes: bool = Query(Tr
 
             if st["field_idx"] >= len(form["fields"]):
                 st["stage"] = "review"
-                session_manager.update(session_id, st)
+                get_session_manager().update(session_id, st)
                 logger.info(f"Session {session_id}: Confirmed and completed all fields")
                 return {"ok": True, "done": True, "message": "Đã đủ thông tin. Bạn có thể xem trước."}
 
-            session_manager.update(session_id, st)
+            get_session_manager().update(session_id, st)
             nxt = st["questions"][st["field_idx"]]
             next_field = form["fields"][st["field_idx"]]
             logger.info(f"Session {session_id}: Value confirmed, moving to next field")
@@ -623,7 +642,7 @@ def confirm(request: Request, session_id: str = Query(...), yes: bool = Query(Tr
         else:
             st["pending"] = {}
             st["stage"] = "ask"
-            session_manager.update(session_id, st)
+            get_session_manager().update(session_id, st)
             q = st["questions"][idx]
             logger.info(f"Session {session_id}: Value rejected, requesting re-entry")
             return {
@@ -646,7 +665,7 @@ def confirm(request: Request, session_id: str = Query(...), yes: bool = Query(Tr
 def preview(request: Request, session_id: str):
     """Generate preview of form submission"""
     try:
-        st = session_manager.get(session_id)
+        st = get_session_manager().get(session_id)
         if not st:
             raise HTTPException(404, "Session không tồn tại hoặc đã hết hạn.")
 
@@ -692,7 +711,7 @@ def preview(request: Request, session_id: str):
             st["preview"] = [{"label": f["label"], "value": answers.get(f["name"], "")} for f in form["fields"]]
             st["prose"] = " ".join([f"{f['label']}: {answers.get(f['name'], '')}" for f in form["fields"]])
 
-        session_manager.update(session_id, st)
+        get_session_manager().update(session_id, st)
         return {"ok": True, "preview": st["preview"], "prose": st["prose"]}
 
     except HTTPException:
@@ -707,7 +726,7 @@ def preview(request: Request, session_id: str):
 def export_pdf(request: Request, session_id: str):
     """Export form as PDF"""
     try:
-        st = session_manager.get(session_id)
+        st = get_session_manager().get(session_id)
         if not st:
             raise HTTPException(404, "Session không tồn tại hoặc đã hết hạn.")
 
