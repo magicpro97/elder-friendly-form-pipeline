@@ -40,4 +40,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Run the application - Railway sets PORT env var at runtime
 # We use exec form with python -m to avoid shell issues
-CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", 8000]
