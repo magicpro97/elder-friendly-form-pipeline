@@ -24,6 +24,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Copy start script and make it executable
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
@@ -31,10 +35,6 @@ USER appuser
 # Expose port (Railway provides PORT env var)
 EXPOSE 8000
 ENV PORT=8000
-
-# Copy start script
-COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
