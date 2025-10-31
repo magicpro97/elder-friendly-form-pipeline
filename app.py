@@ -302,9 +302,41 @@ SCHEMA_PREVIEW = {
     "additionalProperties": False,
 }
 
-SYSTEM_ASK = "Bạn là trợ lý điền form cho người cao tuổi. Viết câu hỏi rất ngắn, 1 ý/1 câu, lịch sự, dùng từ giản dị, có ví dụ nếu có. Với trường không bắt buộc, nói 'có thể bỏ qua'. Trả về JSON đúng schema."
-SYSTEM_GRADER = "Bạn đánh giá một giá trị trường form. Nếu giá trị hợp lệ nhưng bất thường (tuổi ngoài 18–90, địa chỉ quá ngắn, email miền lạ, số điện thoại có vẻ sai), đặt is_suspicious=true và tạo một câu hỏi xác nhận ngắn, lịch sự. Nếu có gợi ý sửa, ghi vào hint. Trả về JSON đúng schema."
-SYSTEM_PREVIEW = "Từ các câu trả lời cuối cùng của người dùng, tạo preview (label gốc + value) và viết một đoạn văn hành chính mạch lạc, lịch sự để in ra PDF. Trả về JSON đúng schema."
+SYSTEM_ASK = """
+Bạn là trợ lý thân thiện giúp người cao tuổi điền form bằng tiếng Việt.
+
+Yêu cầu về câu hỏi:
+- Xưng hô "cháu" với "bác", giọng điệu ấm áp, kính trọng.
+- Mỗi câu hỏi rất ngắn, chỉ một ý, dễ nghe (khoảng 8–16 từ).
+- Dùng từ phổ thông, tránh thuật ngữ. Tránh câu ghép dài.
+- Trường không bắt buộc: nói rõ "(không bắt buộc, bác có thể bỏ qua)".
+- Nếu có ví dụ, thêm 1 ví dụ ngắn trong dấu "Ví dụ: …".
+- Viết sẵn câu nhắc lại (reprompt) lịch sự, khích lệ, không đổ lỗi.
+
+Chỉ trả về JSON đúng schema "questions_response" (không thêm lời dẫn hoặc giải thích).
+    """
+SYSTEM_GRADER = """
+Bạn đánh giá một giá trị của trường form.
+
+Nguyên tắc:
+- Nếu giá trị hợp lệ nhưng có dấu hiệu bất thường (ví dụ: tuổi < 18 hoặc > 90, địa chỉ quá ngắn, email miền lạ, số điện thoại sai định dạng/độ dài, họ tên chứa chữ số, ngày sinh ngoài khoảng), đặt is_suspicious=true.
+- Tạo một câu hỏi xác nhận rất ngắn, lịch sự, dễ trả lời "đúng/sai"; không phỏng đoán.
+- Nếu có thể, đưa ra một gợi ý sửa ngắn gọn, thực tế trong "hint".
+- Không lặp lại toàn bộ hướng dẫn; không thêm ký tự trang trí.
+
+Chỉ trả về JSON đúng schema "grader_response".
+    """
+SYSTEM_PREVIEW = """
+Từ các câu trả lời đã hoàn tất, tạo:
+1) preview: mảng các cặp {label gốc, value}, giữ nguyên thứ tự trường trong form.
+2) prose: một đoạn văn hành chính ngắn, mạch lạc, kính trọng (không markdown), tổng hợp nội dung để in PDF.
+
+Yêu cầu:
+- Không bịa thêm thông tin, không suy diễn. Bỏ qua trường trống/không bắt buộc nếu người dùng chưa cung cấp.
+- Giữ dấu tiếng Việt, dùng câu ngắn, rõ ý.
+
+Chỉ trả về JSON đúng schema "preview_response".
+    """
 
 app = FastAPI(title="Elder-Friendly Form Pipeline", version="1.0.0")
 
@@ -399,9 +431,11 @@ def start_session(request: Request, req: StartReq):
             questions = []
             for f in form_meta["fields"]:
                 ex = f.get("example")
-                ex_part = f" (ví dụ: {ex})" if ex else ""
-                ask = f'{f["label"]} của bác là gì ạ?{ex_part}'
-                reprompt = f'Cháu chưa nghe rõ, bác nhắc lại {f["label"].lower()} giúp cháu nhé.'
+                optional_note = "" if f.get("required", True) else " (không bắt buộc, bác có thể bỏ qua)."
+                ex_part = f" Ví dụ: {ex}." if ex else ""
+                label_lower = f.get("label", "").lower()
+                ask = f"Bác cho cháu xin {label_lower} ạ.{optional_note}{ex_part}"
+                reprompt = f"Cháu xin phép chưa nghe rõ, bác nhắc lại {label_lower} giúp cháu với ạ."
                 questions.append({"name": f["name"], "ask": ask, "reprompt": reprompt, "example": ex or None})
 
         session_data["questions"] = questions
