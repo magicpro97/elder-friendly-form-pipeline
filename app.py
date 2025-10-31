@@ -40,10 +40,15 @@ load_dotenv()
 class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_model: str = "o4-mini"
+
+    # Redis configuration
+    # Railway provides REDIS_URL in format redis://default:password@host:port
+    redis_url: str | None = None
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
     redis_password: str | None = None
+
     session_ttl_seconds: int = 3600  # 1 hour
     pdf_template: str = "generic_form.html"
 
@@ -51,6 +56,9 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
     rate_limit_per_minute: int = 60
     rate_limit_per_hour: int = 1000
+
+    # Port configuration (Railway provides PORT env var)
+    port: int = 8000
 
     class Config:
         env_file = ".env"
@@ -74,19 +82,34 @@ env = Environment(
 
 # Redis connection
 def get_redis_client() -> redis.Redis:
-    """Get Redis client with connection pooling"""
+    """Get Redis client with connection pooling.
+
+    Supports both Railway (REDIS_URL) and local development (REDIS_HOST/PORT).
+    """
     try:
-        client = redis.Redis(
-            host=settings.redis_host,
-            port=settings.redis_port,
-            db=settings.redis_db,
-            password=settings.redis_password,
-            decode_responses=True,
-            socket_connect_timeout=5,
-            socket_timeout=5,
-        )
+        # Railway provides REDIS_URL environment variable
+        if settings.redis_url:
+            client = redis.from_url(
+                settings.redis_url,
+                decode_responses=True,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+            )
+            logger.info(f"Connected to Redis via REDIS_URL: {settings.redis_url.split('@')[-1]}")
+        else:
+            # Local development with individual settings
+            client = redis.Redis(
+                host=settings.redis_host,
+                port=settings.redis_port,
+                db=settings.redis_db,
+                password=settings.redis_password,
+                decode_responses=True,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+            )
+            logger.info(f"Connected to Redis at {settings.redis_host}:{settings.redis_port}")
+
         client.ping()  # Test connection
-        logger.info("Redis connection established")
         return client
     except redis.ConnectionError as e:
         logger.error(f"Redis connection failed: {e}")

@@ -1,8 +1,6 @@
-# Elder-Friendly Form Pipeline (FastAPI)
-
 # Elder-Friendly Form Pipeline
 
-![CI/CD](https://github.com/YOUR_USERNAME/fastapi_form_pipeline/workflows/CI/CD%20Pipeline/badge.svg)
+![CI/CD](https://github.com/magicpro97/elder-friendly-form-pipeline/workflows/Deploy%20to%20Railway/badge.svg)
 ![Coverage](https://img.shields.io/badge/coverage-80%25-green)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.115.2-009688)
@@ -10,12 +8,65 @@
 
 **Hệ thống hỗ trợ điền form qua hội thoại dành cho người cao tuổi Việt Nam**
 
+🚂 **Deployed on Railway.app** | 🌐 **Live Demo**: [Coming soon]
 
-## 🚀 Quick Start với Docker (Khuyến nghị)
+---
+
+## 🚀 Quick Deploy to Railway
+
+### Option 1: One-Click Deploy (Fastest)
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/elder-form)
+
+### Option 2: Deploy via CLI
+
+```bash
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Login to Railway
+railway login
+
+# Initialize project (in project directory)
+railway init
+
+# Add Redis service
+railway add --service redis
+
+# Set environment variables
+railway variables set OPENAI_API_KEY=sk-your-key-here
+railway variables set OPENAI_MODEL=o4-mini
+
+# Deploy!
+railway up
+
+# Get your app URL
+railway status
+```
+
+### Option 3: Auto-Deploy via GitHub Actions
+
+1. Fork this repository
+2. Get Railway token:
+   ```bash
+   railway whoami
+   # Copy token from ~/.railway/config.json
+   ```
+3. Add `RAILWAY_TOKEN` to GitHub repository secrets:
+   - Go to: Settings → Secrets and variables → Actions
+   - Add new secret: `RAILWAY_TOKEN`
+4. Push to `main` branch → Auto-deploys! 🎉
+
+---
+
+## 🛠️ Local Development
+
+### Quick Start với Docker (Khuyến nghị)
 
 ```bash
 # 1. Clone và vào thư mục dự án
-cd fastapi_form_pipeline
+git clone https://github.com/magicpro97/elder-friendly-form-pipeline.git
+cd elder-friendly-form-pipeline
 
 # 2. Tạo file .env từ template
 cp .env.example .env
@@ -33,11 +84,9 @@ curl http://localhost:8000/forms
 
 API sẽ chạy tại: `http://localhost:8000`
 
-## 🛠️ Run locally (Development)
+### Run Locally (Development)
 
 ```bash
-cd fastapi_form_pipeline
-
 # Tạo virtual environment
 python -m venv .venv
 
@@ -52,9 +101,7 @@ pip install -r requirements.txt
 
 # Setup environment
 cp .env.example .env
-# Chỉnh sửa .env và thêm:
-# - OPENAI_API_KEY
-# - REDIS_HOST=localhost (hoặc chạy Redis container)
+# Chỉnh sửa .env và thêm OPENAI_API_KEY
 
 # Chạy Redis (nếu chưa có)
 docker run -d -p 6379:6379 redis:7-alpine
@@ -62,6 +109,8 @@ docker run -d -p 6379:6379 redis:7-alpine
 # Chạy app
 uvicorn app:app --reload --port 8000
 ```
+
+---
 
 ## 📋 Endpoints
 
@@ -107,7 +156,93 @@ uvicorn app:app --reload --port 8000
 
 ## 🔧 Configuration
 
-Tất cả config qua environment variables (xem `.env.example`):
+### Environment Variables
+
+Railway tự động cung cấp một số biến môi trường:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `OPENAI_API_KEY` | No | None | OpenAI API key (fallback mode if missing) |
+| `OPENAI_MODEL` | No | o4-mini | OpenAI model name |
+| `REDIS_URL` | Railway | Auto | Redis connection URL (auto-provided by Railway) |
+| `REDIS_HOST` | Local | localhost | Redis hostname for local dev |
+| `REDIS_PORT` | Local | 6379 | Redis port for local dev |
+| `PORT` | Railway | 8000 | Application port (auto-provided by Railway) |
+| `SESSION_TTL_SECONDS` | No | 3600 | Session lifetime (1 hour) |
+| `RATE_LIMIT_PER_MINUTE` | No | 60 | Rate limit per minute |
+
+**Railway Auto-Config:**
+- `REDIS_URL`: Tự động set khi add Redis service
+- `PORT`: Tự động set bởi Railway platform
+- App tự động detect và sử dụng các biến này
+
+**Local Development:**
+```bash
+cp .env.example .env
+# Edit .env và set:
+# - OPENAI_API_KEY=sk-your-key
+# - REDIS_HOST=localhost
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+# Install dev dependencies
+pip install -r requirements-dev.txt
+
+# Run tests with coverage
+pytest tests/ -v --cov=. --cov-report=term --cov-report=html
+
+# Run specific test file
+pytest tests/test_api.py -v
+
+# Run linters
+ruff check .
+black --check .
+```
+
+---
+
+## 📦 Tech Stack
+
+- **Backend**: FastAPI 0.115.2, Python 3.11
+- **Database**: Redis 7 (session storage)
+- **AI**: OpenAI GPT-4o-mini (with graceful fallback)
+- **PDF**: WeasyPrint (Vietnamese font support)
+- **Deployment**: Railway.app (container-based)
+- **CI/CD**: GitHub Actions (automated testing + deployment)
+- **Frontend**: Vanilla JavaScript, CSS3, Web Speech API
+
+---
+
+## 📂 Project Structure
+
+```
+elder-friendly-form-pipeline/
+├── app.py                 # Main FastAPI application
+├── forms/
+│   └── form_samples.json # Form definitions
+├── templates/
+│   ├── index.html        # Landing page
+│   ├── base.html         # Base template
+│   └── generic_form.html # PDF template
+├── static/
+│   ├── css/main.css      # Elder-friendly styles
+│   └── js/app.js         # Frontend logic
+├── tests/                # Test suite
+├── .github/
+│   └── workflows/
+│       └── railway-deploy.yml  # CI/CD pipeline
+├── railway.toml          # Railway config
+├── railway.json          # Railway template
+├── Dockerfile            # Container definition
+├── docker-compose.yml    # Local development
+└── requirements.txt      # Python dependencies
+```
+
+---
 
 | Variable | Default | Description |
 |----------|---------|-------------|
