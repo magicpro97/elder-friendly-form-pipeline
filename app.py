@@ -11,6 +11,8 @@ import redis
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
@@ -174,7 +176,7 @@ def get_client():
 def call_openai_with_retry(client, **kwargs):
     """Call OpenAI API with retry logic"""
     try:
-        return client.responses.create(**kwargs)
+        return client.chat.completions.create(**kwargs)
     except Exception as e:
         logger.error(f"OpenAI API call failed: {e}")
         raise
@@ -207,6 +209,7 @@ def pick_form(text: str) -> str | None:
 
 
 SCHEMA_QUESTIONS = {
+    "name": "questions_response",
     "type": "object",
     "properties": {
         "questions": {
@@ -228,6 +231,7 @@ SCHEMA_QUESTIONS = {
     "additionalProperties": False,
 }
 SCHEMA_GRADER = {
+    "name": "grader_response",
     "type": "object",
     "properties": {
         "is_suspicious": {"type": "boolean"},
@@ -238,6 +242,7 @@ SCHEMA_GRADER = {
     "additionalProperties": False,
 }
 SCHEMA_PREVIEW = {
+    "name": "preview_response",
     "type": "object",
     "properties": {
         "preview": {
@@ -261,6 +266,12 @@ SYSTEM_PREVIEW = "Từ các câu trả lời cuối cùng của người dùng, 
 
 app = FastAPI(title="Elder-Friendly Form Pipeline", version="1.0.0")
 
+# Mount static files
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+
+# Jinja2 templates for HTML pages
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+
 # Add rate limiter to app state
 app.state.limiter = limiter
 
@@ -273,13 +284,23 @@ async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
 
 
 class StartReq(BaseModel):
-    form: str | None = None
-    query: str | None = None
+    form_query: str  # Accepts form_id, title, or alias
+
+
+class AnswerReq(BaseModel):
+    session_id: str
+    answer: str
 
 
 class TurnIn(BaseModel):
     session_id: str
     text: str
+
+
+@app.get("/")
+async def index(request: Request):
+    """Serve the main web interface"""
+    return templates.TemplateResponse("index.html", {"request": request})
 
 
 @app.get("/forms")
@@ -294,9 +315,9 @@ def list_forms(request: Request):
 def start_session(request: Request, req: StartReq):
     """Start a new form session"""
     try:
-        fid = req.form or pick_form(req.query or "")
+        fid = pick_form(req.form_query)
         if not fid or fid not in FORM_INDEX:
-            logger.warning(f"Form not found: form={req.form}, query={req.query}")
+            logger.warning(f"Form not found: query={req.form_query}")
             raise HTTPException(400, "Không xác định được form. Vui lòng nêu rõ tên form.")
 
         sid = str(uuid.uuid4())
@@ -311,16 +332,21 @@ def start_session(request: Request, req: StartReq):
                 out = call_openai_with_retry(
                     client,
                     model=settings.openai_model,
-                    input=[
+                    messages=[
                         {"role": "system", "content": SYSTEM_ASK},
                         {
                             "role": "user",
                             "content": f"Form metadata:\n```json\n{json.dumps(form_meta, ensure_ascii=False)}\n```",
                         },
                     ],
-                    text_format={"type": "json_schema", "json_schema": SCHEMA_QUESTIONS, "strict": True},
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {"name": SCHEMA_QUESTIONS["name"], "schema": SCHEMA_QUESTIONS},
+                    },
                 )
-                questions = out.output_parsed["questions"]
+                response_content = out.choices[0].message.content
+                parsed_response = json.loads(response_content)
+                questions = parsed_response["questions"]
                 logger.info(f"Generated {len(questions)} questions via OpenAI")
             except (RetryError, Exception) as e:
                 logger.error(f"OpenAI question generation failed: {e}, using fallback")
@@ -340,8 +366,16 @@ def start_session(request: Request, req: StartReq):
         session_manager.create(sid, session_data)
 
         first = questions[0]
+        first_field = form_meta["fields"][0]
         logger.info(f"Session {sid} created for form {fid}")
-        return {"session_id": sid, "form_id": fid, "ask": first["ask"], "field": first["name"]}
+        return {
+            "session_id": sid,
+            "form_id": fid,
+            "ask": first["ask"],
+            "field": first["name"],
+            "example": first.get("example"),
+            "required": first_field.get("required", True),
+        }
 
     except HTTPException:
         raise
@@ -425,7 +459,7 @@ def question_next(request: Request, inp: TurnIn):
 
 @app.post("/answer")
 @limiter.limit("30/minute")
-def answer_field(request: Request, inp: TurnIn):
+def answer_field(request: Request, inp: AnswerReq):
     """Process answer for current field"""
     try:
         st = session_manager.get(inp.session_id)
@@ -441,7 +475,24 @@ def answer_field(request: Request, inp: TurnIn):
             return {"done": True, "message": "Đã đủ thông tin."}
 
         field = fields[idx]
-        ok, msg, norm_val = _validate_field(field, inp.text.strip())
+        answer_text = inp.answer.strip()
+
+        # Allow skipping optional fields
+        if not answer_text and not field.get("required", True):
+            st["field_idx"] += 1
+
+            if st["field_idx"] >= len(fields):
+                st["stage"] = "review"
+                session_manager.update(inp.session_id, st)
+                logger.info(f"Session {inp.session_id}: All fields completed")
+                return {"ok": True, "done": True, "message": "Đã đủ thông tin. Bạn có thể xem trước."}
+
+            session_manager.update(inp.session_id, st)
+            nxt = st["questions"][st["field_idx"]]
+            logger.info(f"Session {inp.session_id}: Skipped optional field {field['name']}")
+            return {"ok": True, "ask": nxt["ask"], "field": nxt["name"], "example": nxt.get("example")}
+
+        ok, msg, norm_val = _validate_field(field, answer_text)
 
         if not ok:
             logger.info(f"Session {inp.session_id}: Validation failed for {field['name']}: {msg}")
@@ -455,10 +506,14 @@ def answer_field(request: Request, inp: TurnIn):
                 out = call_openai_with_retry(
                     client,
                     model=settings.openai_model,
-                    input=[{"role": "system", "content": SYSTEM_GRADER}, {"role": "user", "content": content}],
-                    text_format={"type": "json_schema", "json_schema": SCHEMA_GRADER, "strict": True},
+                    messages=[{"role": "system", "content": SYSTEM_GRADER}, {"role": "user", "content": content}],
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {"name": SCHEMA_GRADER["name"], "schema": SCHEMA_GRADER},
+                    },
                 )
-                g = out.output_parsed
+                response_content = out.choices[0].message.content
+                g = json.loads(response_content)
                 if g.get("is_suspicious"):
                     st["pending"] = {"value": norm_val}
                     st["stage"] = "confirm"
@@ -466,8 +521,9 @@ def answer_field(request: Request, inp: TurnIn):
                     logger.info(f"Session {inp.session_id}: Suspicious value detected, requesting confirmation")
                     return {
                         "ok": True,
-                        "confirm_required": True,
-                        "confirm_question": g.get("confirm_question"),
+                        "stage": "confirm",
+                        "pending_value": norm_val,
+                        "message": g.get("confirm_question") or f"Bác chắc chắn là '{norm_val}' chứ?",
                         "hint": g.get("hint"),
                     }
             except (RetryError, Exception) as e:
@@ -484,8 +540,15 @@ def answer_field(request: Request, inp: TurnIn):
 
         session_manager.update(inp.session_id, st)
         nxt = st["questions"][st["field_idx"]]
+        next_field = fields[st["field_idx"]]
         logger.debug(f"Session {inp.session_id}: Answer accepted, moving to next field")
-        return {"ok": True, "ask": nxt["ask"], "field": nxt["name"]}
+        return {
+            "ok": True,
+            "ask": nxt["ask"],
+            "field": nxt["name"],
+            "example": nxt.get("example"),
+            "required": next_field.get("required", True),
+        }
 
     except HTTPException:
         raise
@@ -496,10 +559,10 @@ def answer_field(request: Request, inp: TurnIn):
 
 @app.post("/confirm")
 @limiter.limit("30/minute")
-def confirm(request: Request, inp: TurnIn, yes: bool = Query(True)):
+def confirm(request: Request, session_id: str = Query(...), yes: bool = Query(True)):
     """Confirm or reject suspicious value"""
     try:
-        st = session_manager.get(inp.session_id)
+        st = session_manager.get(session_id)
         if not st:
             raise HTTPException(404, "Session không tồn tại hoặc đã hết hạn.")
 
@@ -519,21 +582,34 @@ def confirm(request: Request, inp: TurnIn, yes: bool = Query(True)):
 
             if st["field_idx"] >= len(form["fields"]):
                 st["stage"] = "review"
-                session_manager.update(inp.session_id, st)
-                logger.info(f"Session {inp.session_id}: Confirmed and completed all fields")
+                session_manager.update(session_id, st)
+                logger.info(f"Session {session_id}: Confirmed and completed all fields")
                 return {"ok": True, "done": True, "message": "Đã đủ thông tin. Bạn có thể xem trước."}
 
-            session_manager.update(inp.session_id, st)
+            session_manager.update(session_id, st)
             nxt = st["questions"][st["field_idx"]]
-            logger.info(f"Session {inp.session_id}: Value confirmed, moving to next field")
-            return {"ok": True, "ask": nxt["ask"], "field": nxt["name"]}
+            next_field = form["fields"][st["field_idx"]]
+            logger.info(f"Session {session_id}: Value confirmed, moving to next field")
+            return {
+                "ok": True,
+                "ask": nxt["ask"],
+                "field": nxt["name"],
+                "example": nxt.get("example"),
+                "required": next_field.get("required", True),
+            }
         else:
             st["pending"] = {}
             st["stage"] = "ask"
-            session_manager.update(inp.session_id, st)
+            session_manager.update(session_id, st)
             q = st["questions"][idx]
-            logger.info(f"Session {inp.session_id}: Value rejected, requesting re-entry")
-            return {"ok": True, "ask": q["ask"], "field": q["name"]}
+            logger.info(f"Session {session_id}: Value rejected, requesting re-entry")
+            return {
+                "ok": True,
+                "ask": q["ask"],
+                "field": q["name"],
+                "example": q.get("example"),
+                "required": field.get("required", True),
+            }
 
     except HTTPException:
         raise
@@ -567,16 +643,20 @@ def preview(request: Request, session_id: str):
                 out = call_openai_with_retry(
                     client,
                     model=settings.openai_model,
-                    input=[
+                    messages=[
                         {"role": "system", "content": SYSTEM_PREVIEW},
                         {
                             "role": "user",
                             "content": f"Form title: {form['title']}\nAnswers (JSON):\n```json\n{json.dumps(answers, ensure_ascii=False)}\n```",
                         },
                     ],
-                    text_format={"type": "json_schema", "json_schema": SCHEMA_PREVIEW, "strict": True},
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {"name": SCHEMA_PREVIEW["name"], "schema": SCHEMA_PREVIEW},
+                    },
                 )
-                res = out.output_parsed
+                response_content = out.choices[0].message.content
+                res = json.loads(response_content)
                 st["preview"] = res["preview"]
                 st["prose"] = res["prose"]
                 logger.info(f"Session {session_id}: Preview generated via OpenAI")

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Hệ thống điền form thân thiện với người cao tuổi"
+    />
+    <title>Hệ thống Điền Form - Dễ Dùng và Thân Thiện</title>
+    <link rel="stylesheet" href="/static/css/main.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="header-content">
+        <div>
+          <h1>📋 Điền Form Dễ Dàng</h1>
+          <p class="header-subtitle">
+            Hệ thống hỗ trợ điền form thân thiện, có thể nói hoặc gõ
+          </p>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <div id="mainContent">
+        <!-- Welcome Section -->
+        <div class="welcome-section" style="margin-bottom: var(--spacing-xl)">
+          <div class="alert alert-info">
+            <span style="font-size: 28px">👋</span>
+            <div>
+              <strong style="font-size: var(--font-large)"
+                >Chào mừng bạn!</strong
+              ><br />
+              <span style="font-size: var(--font-base)">
+                Chọn form bên dưới để bắt đầu. Hệ thống sẽ hỏi từng câu một, bạn
+                có thể trả lời bằng cách gõ hoặc nhấn nút 🎤 để nói.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Features Grid -->
+        <div
+          style="
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-xl);
+          "
+        >
+          <div
+            style="
+              background: var(--bg-primary);
+              padding: var(--spacing-lg);
+              border-radius: 12px;
+              box-shadow: var(--shadow);
+            "
+          >
+            <div style="font-size: 48px; margin-bottom: var(--spacing-sm)">
+              🎤
+            </div>
+            <h3
+              style="
+                font-size: var(--font-large);
+                margin-bottom: var(--spacing-sm);
+              "
+            >
+              Nhập bằng giọng nói
+            </h3>
+            <p style="color: var(--text-secondary)">
+              Chỉ cần nói, hệ thống sẽ tự động ghi lại
+            </p>
+          </div>
+
+          <div
+            style="
+              background: var(--bg-primary);
+              padding: var(--spacing-lg);
+              border-radius: 12px;
+              box-shadow: var(--shadow);
+            "
+          >
+            <div style="font-size: 48px; margin-bottom: var(--spacing-sm)">
+              💬
+            </div>
+            <h3
+              style="
+                font-size: var(--font-large);
+                margin-bottom: var(--spacing-sm);
+              "
+            >
+              Trò chuyện đơn giản
+            </h3>
+            <p style="color: var(--text-secondary)">
+              Trả lời từng câu hỏi như đang trò chuyện
+            </p>
+          </div>
+
+          <div
+            style="
+              background: var(--bg-primary);
+              padding: var(--spacing-lg);
+              border-radius: 12px;
+              box-shadow: var(--shadow);
+            "
+          >
+            <div style="font-size: 48px; margin-bottom: var(--spacing-sm)">
+              ✅
+            </div>
+            <h3
+              style="
+                font-size: var(--font-large);
+                margin-bottom: var(--spacing-sm);
+              "
+            >
+              Kiểm tra tự động
+            </h3>
+            <p style="color: var(--text-secondary)">
+              Hệ thống tự động kiểm tra và gợi ý
+            </p>
+          </div>
+        </div>
+
+        <!-- Forms Selection -->
+        <div>
+          <h2
+            style="
+              font-size: var(--font-xxlarge);
+              margin-bottom: var(--spacing-lg);
+              color: var(--primary-color);
+            "
+          >
+            📝 Chọn Form Cần Điền
+          </h2>
+          <div id="formsContainer" class="form-grid">
+            <!-- Forms will be loaded here by JavaScript -->
+            <div
+              style="
+                grid-column: 1 / -1;
+                text-align: center;
+                padding: var(--spacing-xl);
+              "
+            >
+              <div class="loading">
+                <div class="loading-dot"></div>
+                <div class="loading-dot"></div>
+                <div class="loading-dot"></div>
+              </div>
+              <p
+                style="
+                  margin-top: var(--spacing-md);
+                  color: var(--text-secondary);
+                  font-size: var(--font-large);
+                "
+              >
+                Đang tải danh sách form...
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Help Section -->
+        <div
+          style="
+            margin-top: var(--spacing-xl);
+            background: var(--bg-accent);
+            padding: var(--spacing-lg);
+            border-radius: 12px;
+            border: 2px solid var(--primary-color);
+          "
+        >
+          <h3
+            style="
+              font-size: var(--font-xlarge);
+              margin-bottom: var(--spacing-md);
+              color: var(--primary-color);
+            "
+          >
+            ❓ Cần hỗ trợ?
+          </h3>
+          <ul
+            style="
+              list-style: none;
+              padding: 0;
+              font-size: var(--font-large);
+              line-height: 2;
+            "
+          >
+            <li>✓ Nhấn vào form bạn muốn điền</li>
+            <li>✓ Đọc câu hỏi và trả lời từng câu một</li>
+            <li>✓ Sử dụng nút 🎤 để nói thay vì gõ</li>
+            <li>✓ Kiểm tra lại thông tin trước khi tải xuống PDF</li>
+          </ul>
+        </div>
+      </div>
+    </main>
+
+    <footer
+      style="
+        text-align: center;
+        padding: var(--spacing-xl);
+        color: var(--text-secondary);
+        font-size: var(--font-base);
+      "
+    >
+      <p>© 2025 Hệ thống Điền Form Thân Thiện | Designed for Elder Users</p>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+  </body>
+</html>
