@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 env:
   REGISTRY: ghcr.io
@@ -15,7 +15,7 @@ jobs:
   test:
     name: Test & Lint
     runs-on: ubuntu-latest
-    
+
     services:
       redis:
         image: redis:7-alpine
@@ -26,17 +26,17 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
-          cache: 'pip'
-      
+          python-version: "3.11"
+          cache: "pip"
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -46,12 +46,12 @@ jobs:
             libgdk-pixbuf2.0-0 \
             libffi-dev \
             shared-mime-info
-      
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      
+
       - name: Run linting
         run: |
           pip install flake8 black isort
@@ -60,14 +60,14 @@ jobs:
           # Check code formatting
           black --check app.py || echo "Code needs formatting"
           isort --check-only app.py || echo "Imports need sorting"
-      
+
       - name: Run tests
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
         run: |
           pytest tests/ -v --cov=. --cov-report=xml --cov-report=term
-      
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -79,46 +79,46 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
-    
+
     permissions:
       contents: read
       security-events: write
       actions: read
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-      
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
 
   # Job 3: Build Docker Image
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
     needs: [test, security]
-    
+
     permissions:
       contents: read
       packages: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -126,7 +126,7 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -138,7 +138,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix={{branch}}-
-      
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -148,7 +148,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      
+
       - name: Test Docker image
         if: github.event_name == 'pull_request'
         run: |
@@ -163,15 +163,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
+
     environment:
       name: production
       url: https://your-app.example.com
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Deploy notification
         run: |
           echo "Deploying to production..."
@@ -180,13 +180,3 @@ jobs:
           # - SSH to server and pull latest image
           # - Update Kubernetes deployment
           # - Trigger cloud provider deployment
-      
-      - name: Notify Slack
-        if: always()
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          text: 'Deployment to production: ${{ job.status }}'
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
