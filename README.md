@@ -48,10 +48,12 @@ railway status
 
 1. Fork this repository
 2. Get Railway token:
+
    ```bash
    railway whoami
    # Copy token from ~/.railway/config.json
    ```
+
 3. Add `RAILWAY_TOKEN` to GitHub repository secrets:
    - Go to: Settings → Secrets and variables → Actions
    - Add new secret: `RAILWAY_TOKEN`
@@ -172,11 +174,13 @@ Railway tự động cung cấp một số biến môi trường:
 | `RATE_LIMIT_PER_MINUTE` | No | 60 | Rate limit per minute |
 
 **Railway Auto-Config:**
+
 - `REDIS_URL`: Tự động set khi add Redis service
 - `PORT`: Tự động set bởi Railway platform
 - App tự động detect và sử dụng các biến này
 
 **Local Development:**
+
 ```bash
 cp .env.example .env
 # Edit .env và set:
@@ -370,6 +374,7 @@ fastapi_form_pipeline/
 ## 🐛 Troubleshooting
 
 **Redis connection failed:**
+
 ```bash
 # Check Redis is running
 docker-compose ps redis
@@ -378,10 +383,12 @@ docker-compose logs redis
 ```
 
 **OpenAI API errors:**
+
 - Check API key trong `.env`
 - Check quota/billing tại OpenAI dashboard
 - App sẽ fallback tự động nếu OpenAI fail
 
 **PDF generation errors:**
+
 - Ensure WeasyPrint dependencies installed
 - Check template syntax trong `templates/`

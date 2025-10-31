@@ -21,7 +21,7 @@ def test_list_forms(client):
 def test_start_session_valid_form(client, mock_openai_client):
     """Test POST /session/start with valid form."""
     with patch("app.get_client", return_value=mock_openai_client):
-        response = client.post("/session/start", json={"query": "đơn xin việc"})
+        response = client.post("/session/start", json={"form_query": "đơn xin việc"})
         assert response.status_code == 200
         data = response.json()
         assert "session_id" in data
@@ -31,7 +31,7 @@ def test_start_session_valid_form(client, mock_openai_client):
 
 def test_start_session_invalid_form(client):
     """Test POST /session/start with invalid form query."""
-    response = client.post("/session/start", json={"query": "nonexistent_form_xyz"})
+    response = client.post("/session/start", json={"form_query": "nonexistent_form_xyz"})
     assert response.status_code == 400  # API returns 400 not 404
 
 
@@ -57,7 +57,7 @@ def test_answer_field_valid(client, mock_openai_client, sample_session):
                     ],
                 }
 
-                response = client.post("/answer", json={"session_id": session_id, "text": "Nguyen Van A"})
+                response = client.post("/answer", json={"session_id": session_id, "answer": "Nguyen Van A"})
 
                 # Should succeed or ask for confirmation
                 assert response.status_code in [200, 202]
@@ -66,7 +66,7 @@ def test_answer_field_valid(client, mock_openai_client, sample_session):
 def test_answer_field_invalid_session(client):
     """Test POST /answer with invalid session."""
     with patch("app.session_manager.get", return_value=None):
-        response = client.post("/answer", json={"session_id": "invalid_session", "text": "test"})
+        response = client.post("/answer", json={"session_id": "invalid_session", "answer": "test"})
         assert response.status_code == 404
 
 

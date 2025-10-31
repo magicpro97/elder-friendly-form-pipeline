@@ -11,7 +11,7 @@ def test_openai_fallback_on_failure(client, sample_form):
         # Simulate OpenAI failure
         mock_get_client.return_value = None
 
-        response = client.post("/session/start", json={"form": sample_form["form_id"]})
+        response = client.post("/session/start", json={"form_query": sample_form["form_id"]})
 
         assert response.status_code == 200
         data = response.json()
@@ -29,7 +29,7 @@ def test_openai_retry_exhausted(client, sample_form):
             # Simulate retry exhausted
             mock_retry.side_effect = Exception("OpenAI failed")
 
-            response = client.post("/session/start", json={"form": sample_form["form_id"]})
+            response = client.post("/session/start", json={"form_query": sample_form["form_id"]})
 
             # Should fallback to basic questions
             assert response.status_code == 200
@@ -158,7 +158,7 @@ def test_confirm_no_pending(client):
     }
 
     with patch("app.session_manager.get", return_value=test_session):
-        response = client.post("/confirm?yes=true", json={"session_id": "test_123", "text": "confirm"})
+        response = client.post("/confirm?session_id=test_123&yes=true")
 
         assert response.status_code == 400
 
