@@ -122,7 +122,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+
         # Timeouts for long-running requests
         proxy_read_timeout 300;
         proxy_connect_timeout 300;

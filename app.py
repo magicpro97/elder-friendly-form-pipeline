@@ -5,7 +5,7 @@ import os
 import re
 import uuid
 from io import BytesIO
-from typing import Any, Dict, Optional
+from typing import Any
 
 import redis
 from dotenv import load_dotenv
@@ -36,12 +36,12 @@ load_dotenv()
 
 # Settings
 class Settings(BaseSettings):
-    openai_api_key: Optional[str] = None
+    openai_api_key: str | None = None
     openai_model: str = "o4-mini"
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
-    redis_password: Optional[str] = None
+    redis_password: str | None = None
     session_ttl_seconds: int = 3600  # 1 hour
     pdf_template: str = "generic_form.html"
 
@@ -88,7 +88,7 @@ def get_redis_client() -> redis.Redis:
         return client
     except redis.ConnectionError as e:
         logger.error(f"Redis connection failed: {e}")
-        raise HTTPException(503, "Session storage không khả dụng. Vui lòng thử lại sau.")
+        raise HTTPException(503, "Session storage không khả dụng. Vui lòng thử lại sau.") from e
 
 
 # Skip Redis connection during testing
@@ -113,13 +113,13 @@ class SessionManager:
     def _key(self, session_id: str) -> str:
         return f"{self.prefix}{session_id}"
 
-    def create(self, session_id: str, data: Dict[str, Any]) -> None:
+    def create(self, session_id: str, data: dict[str, Any]) -> None:
         """Create new session with TTL"""
         key = self._key(session_id)
         self.redis.setex(key, self.ttl, json.dumps(data, ensure_ascii=False))
         logger.info(f"Created session {session_id} with TTL {self.ttl}s")
 
-    def get(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def get(self, session_id: str) -> dict[str, Any] | None:
         """Get session data"""
         key = self._key(session_id)
         data = self.redis.get(key)
@@ -130,7 +130,7 @@ class SessionManager:
         logger.warning(f"Session {session_id} not found or expired")
         return None
 
-    def update(self, session_id: str, data: Dict[str, Any]) -> None:
+    def update(self, session_id: str, data: dict[str, Any]) -> None:
         """Update session data and refresh TTL"""
         key = self._key(session_id)
         if self.redis.exists(key):
@@ -181,7 +181,7 @@ def call_openai_with_retry(client, **kwargs):
 
 
 def load_forms():
-    with open(FORMS_PATH, "r", encoding="utf-8") as f:
+    with open(FORMS_PATH, encoding="utf-8") as f:
         return json.load(f)["forms"]
 
 
@@ -193,7 +193,7 @@ for f in FORMS:
         ALIASES[a.lower()] = f["form_id"]
 
 
-def pick_form(text: str) -> Optional[str]:
+def pick_form(text: str) -> str | None:
     t = (text or "").strip().lower()
     if t in FORM_INDEX:
         return t
@@ -273,8 +273,8 @@ async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
 
 
 class StartReq(BaseModel):
-    form: Optional[str] = None
-    query: Optional[str] = None
+    form: str | None = None
+    query: str | None = None
 
 
 class TurnIn(BaseModel):
@@ -347,7 +347,7 @@ def start_session(request: Request, req: StartReq):
         raise
     except Exception as e:
         logger.error(f"Unexpected error in start_session: {e}", exc_info=True)
-        raise HTTPException(500, "Đã xảy ra lỗi. Vui lòng thử lại.")
+        raise HTTPException(500, "Đã xảy ra lỗi. Vui lòng thử lại.") from e
 
 
 def _validate_field(field, value):
@@ -376,22 +376,22 @@ def _validate_field(field, value):
         elif t == "numeric_range":
             try:
                 num = float(value)
-            except:
+            except (ValueError, TypeError):
                 return False, v.get("message") or "Cần số.", value
             mi, ma = float(v["min"]), float(v["max"])
             if not (mi <= num <= ma):
-                return False, v.get("message") or f"Giá trị cần trong [{mi},{ma}].", value
+                return False, v.get("message") or f"Giá trị cần trong [{mi}, {ma}].", value
         elif t == "date_range":
             try:
                 d = dt.datetime.strptime(value, "%d/%m/%Y").date()
-            except:
+            except (ValueError, TypeError):
                 return False, "Ngày nên là dd/mm/yyyy.", value
             min_d = dt.date.fromisoformat(v["min"])
             max_d = dt.date.fromisoformat(v["max"])
             if not (min_d <= d <= max_d):
                 return False, v.get("message") or "Ngày ngoài khoảng cho phép.", value
     if field.get("pattern") and not re.match(field["pattern"], value):
-        return False, f'{field.get("label","Trường")} chưa đúng.', value
+        return False, f'{field.get("label", "Trường")} chưa đúng.', value
     return True, "", value
 
 
@@ -420,7 +420,7 @@ def question_next(request: Request, inp: TurnIn):
         raise
     except Exception as e:
         logger.error(f"Error in question_next: {e}", exc_info=True)
-        raise HTTPException(500, "Đã xảy ra lỗi. Vui lòng thử lại.")
+        raise HTTPException(500, "Đã xảy ra lỗi. Vui lòng thử lại.") from e
 
 
 @app.post("/answer")
@@ -491,7 +491,7 @@ def answer_field(request: Request, inp: TurnIn):
         raise
     except Exception as e:
         logger.error(f"Error in answer_field: {e}", exc_info=True)
-        raise HTTPException(500, "Đã xảy ra lỗi. Vui lòng thử lại.")
+        raise HTTPException(500, "Đã xảy ra lỗi. Vui lòng thử lại.") from e
 
 
 @app.post("/confirm")
@@ -539,7 +539,7 @@ def confirm(request: Request, inp: TurnIn, yes: bool = Query(True)):
         raise
     except Exception as e:
         logger.error(f"Error in confirm: {e}", exc_info=True)
-        raise HTTPException(500, "Đã xảy ra lỗi. Vui lòng thử lại.")
+        raise HTTPException(500, "Đã xảy ra lỗi. Vui lòng thử lại.") from e
 
 
 @app.get("/preview")
@@ -587,7 +587,7 @@ def preview(request: Request, session_id: str):
         if not client:
             logger.info(f"Session {session_id}: Using fallback preview generation")
             st["preview"] = [{"label": f["label"], "value": answers.get(f["name"], "")} for f in form["fields"]]
-            st["prose"] = " ".join([f"{f['label']}: {answers.get(f['name'],'')}" for f in form["fields"]])
+            st["prose"] = " ".join([f"{f['label']}: {answers.get(f['name'], '')}" for f in form["fields"]])
 
         session_manager.update(session_id, st)
         return {"ok": True, "preview": st["preview"], "prose": st["prose"]}
@@ -596,7 +596,7 @@ def preview(request: Request, session_id: str):
         raise
     except Exception as e:
         logger.error(f"Error in preview: {e}", exc_info=True)
-        raise HTTPException(500, "Đã xảy ra lỗi. Vui lòng thử lại.")
+        raise HTTPException(500, "Đã xảy ra lỗi. Vui lòng thử lại.") from e
 
 
 @app.get("/export_pdf")
@@ -634,4 +634,4 @@ def export_pdf(request: Request, session_id: str):
         raise
     except Exception as e:
         logger.error(f"Error in export_pdf: {e}", exc_info=True)
-        raise HTTPException(500, "Đã xảy ra lỗi khi tạo PDF. Vui lòng thử lại.")
+        raise HTTPException(500, "Đã xảy ra lỗi khi tạo PDF. Vui lòng thử lại.") from e

@@ -1,14 +1,15 @@
 """Pytest configuration and fixtures."""
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-import fakeredis
-import sys
+
 import os
 
 # Set environment variable to skip Redis connection in tests
-os.environ['TESTING'] = 'true'
+os.environ["TESTING"] = "true"
 
-from fastapi.testclient import TestClient
+from unittest.mock import Mock, patch  # noqa: E402
+
+import fakeredis  # noqa: E402
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
 
 @pytest.fixture
@@ -21,13 +22,14 @@ def mock_redis():
 def session_manager(mock_redis):
     """SessionManager with fake Redis."""
     from app import SessionManager
+
     return SessionManager(mock_redis, ttl=3600)
 
 
 @pytest.fixture
 def mock_settings():
     """Mock Settings with test configuration."""
-    with patch('app.Settings') as mock:
+    with patch("app.Settings") as mock:
         mock.return_value.openai_api_key = "test-key"
         mock.return_value.openai_model = "gpt-4"
         mock.return_value.redis_host = "localhost"
@@ -53,9 +55,10 @@ def mock_openai_client():
 @pytest.fixture
 def client(mock_redis, mock_settings):
     """FastAPI test client with mocked dependencies."""
-    with patch('app.redis.Redis', return_value=mock_redis):
-        with patch('app.settings', mock_settings):
+    with patch("app.redis.Redis", return_value=mock_redis):
+        with patch("app.settings", mock_settings):
             from app import app
+
             return TestClient(app)
 
 
@@ -73,9 +76,7 @@ def sample_form():
                 "type": "text",
                 "required": True,
                 "normalizers": ["strip_spaces", "title_case"],
-                "validators": [
-                    {"type": "length", "min": 2, "max": 100}
-                ]
+                "validators": [{"type": "length", "min": 2, "max": 100}],
             },
             {
                 "id": "birth_date",
@@ -83,12 +84,10 @@ def sample_form():
                 "type": "date",
                 "required": True,
                 "normalizers": ["strip_spaces"],
-                "validators": [
-                    {"type": "date_range", "min": "1930-01-01", "max": "2010-12-31"}
-                ],
-                "pattern": r"^\d{2}/\d{2}/\d{4}$"
-            }
-        ]
+                "validators": [{"type": "date_range", "min": "1930-01-01", "max": "2010-12-31"}],
+                "pattern": r"^\d{2}/\d{2}/\d{4}$",
+            },
+        ],
     }
 
 
@@ -104,15 +103,15 @@ def sample_session():
                 "name": "full_name",
                 "ask": "Họ và tên của bác là gì ạ?",
                 "reprompt": "Cháu chưa nghe rõ, bác nhắc lại họ và tên giúp cháu nhé.",
-                "example": None
+                "example": None,
             },
             {
                 "name": "birth_date",
                 "ask": "Ngày sinh của bác là ngày nào ạ?",
                 "reprompt": "Cháu chưa nghe rõ, bác nhắc lại ngày sinh giúp cháu nhé.",
-                "example": None
-            }
+                "example": None,
+            },
         ],
         "stage": "ask",
-        "pending": None
+        "pending": None,
     }

@@ -23,7 +23,7 @@ This is a FastAPI-based conversational form assistant designed for elderly Vietn
 
 ### Validation Pipeline
 1. **Normalizers** (strip_spaces, collapse_whitespace, upper/lower/title_case)
-2. **Validators** (regex, length, numeric_range, date_range)  
+2. **Validators** (regex, length, numeric_range, date_range)
 3. **AI Grader** (suspicious value detection with confirmation prompts)
 4. **Field patterns** (top-level regex validation)
 
@@ -64,7 +64,7 @@ def export_pdf(request: Request, session_id: str):
 All user-facing messages use respectful Vietnamese tone ("bác"/"cháu"):
 ```python
 "Họ và tên của bác là gì ạ?"
-"Cháu chưa nghe rõ, bác nhắc lại..."  
+"Cháu chưa nghe rõ, bác nhắc lại..."
 ```
 
 ### Date Format Convention

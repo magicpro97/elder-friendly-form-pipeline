@@ -250,14 +250,14 @@ Ensure all checks pass before requesting review.
 def validate_field(value: str, field: dict) -> tuple[bool, str, str]:
     """
     Validate field value against field rules.
-    
+
     Args:
         value: User input to validate
         field: Field definition with validators
-    
+
     Returns:
         Tuple of (is_valid, error_message, normalized_value)
-    
+
     Raises:
         ValueError: If field definition is invalid
     """

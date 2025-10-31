@@ -1,6 +1,6 @@
 """Tests for form matching and loading."""
-import pytest
-from app import pick_form, FORM_INDEX, ALIASES
+
+from app import ALIASES, FORM_INDEX, pick_form
 
 
 def test_pick_form_by_exact_id():
@@ -43,7 +43,7 @@ def test_aliases_loaded():
 
 def test_all_forms_have_required_fields():
     """Test that all forms have required structure."""
-    for form_id, form in FORM_INDEX.items():
+    for _form_id, form in FORM_INDEX.items():
         assert "form_id" in form
         assert "title" in form
         assert "fields" in form

@@ -65,7 +65,7 @@ fastapi_form_pipeline/
   - 5 Vietnamese forms
   - Field definitions with validators
   - Vietnamese aliases for NLU
-  
+
 - **`.env`** (create from .env.example)
   - OpenAI API key
   - Redis connection

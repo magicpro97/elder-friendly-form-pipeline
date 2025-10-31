@@ -250,4 +250,3 @@ docker-compose logs redis
 **PDF generation errors:**
 - Ensure WeasyPrint dependencies installed
 - Check template syntax trong `templates/`
-
