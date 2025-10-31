@@ -2,13 +2,15 @@
 """Start script for Railway deployment - reads PORT from environment"""
 
 import os
-import subprocess
 import sys
 
 # Get port from environment, default to 8000
-port = os.environ.get("PORT", "8000")
-sys.stdout.write(f"Starting uvicorn on port {port}\n")
-sys.stdout.flush()
+port = int(os.environ.get("PORT", "8000"))
 
-# Start uvicorn
-sys.exit(subprocess.call(["uvicorn", "app:app", "--host", "0.0.0.0", "--port", port]))
+# Import uvicorn and run
+if __name__ == "__main__":
+    import uvicorn
+
+    sys.stdout.write(f"Starting uvicorn on port {port}\n")
+    sys.stdout.flush()
+    uvicorn.run("app:app", host="0.0.0.0", port=port)
