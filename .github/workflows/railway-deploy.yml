@@ -29,8 +29,8 @@ jobs:
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
 
       - name: Install system dependencies
         run: |
@@ -90,11 +90,12 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          railway up --detach --service app || railway up --detach
+          railway up --detach --service elder-friendly-form-pipeline
 
       - name: Get deployment status
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           echo "✅ Deployment triggered successfully!"
-          echo "Check status at: https://railway.app"
+          echo "📍 Check deployment status: https://railway.app"
+          echo "📊 Monitor logs and health at the Railway dashboard"
