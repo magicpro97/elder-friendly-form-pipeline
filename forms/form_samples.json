@@ -8,6 +8,53 @@
         "apply job",
         "đơn tuyển dụng"
       ],
+      "style": {
+        "header": {
+          "organization": "CÔNG TY TNHH ABC",
+          "department": "Phòng Nhân Sự",
+          "address": "123 Nguyễn Huệ, Quận 1, TP.HCM",
+          "align": "center"
+        },
+        "title": {
+          "text": "ĐơN XIN VIỆC",
+          "font_size": "24px",
+          "font_weight": "bold",
+          "text_transform": "uppercase",
+          "margin_bottom": "20px",
+          "align": "center"
+        },
+        "layout": {
+          "type": "single-column",
+          "field_spacing": "15px",
+          "label_position": "top"
+        },
+        "colors": {
+          "primary": "#2563eb",
+          "text": "#1f2937",
+          "background": "#ffffff",
+          "border": "#d1d5db"
+        },
+        "fonts": {
+          "family": "Arial, sans-serif",
+          "body_size": "14px",
+          "label_size": "13px"
+        },
+        "spacing": {
+          "page_margin": "40px",
+          "section_gap": "25px",
+          "field_gap": "15px"
+        },
+        "footer": {
+          "show_signature_lines": true,
+          "signature_labels": [
+            {
+              "label": "Người nộp đơn",
+              "position": "right"
+            }
+          ],
+          "show_date": true
+        }
+      },
       "fields": [
         {
           "name": "full_name",
@@ -222,24 +269,141 @@
         "lương hưu",
         "hưu trí"
       ],
+      "style": {
+        "header": {
+          "organization": "BẢO HIỂM XÃ HỘI VIỆT NAM",
+          "department": "Bảo Hiểm Xã Hội Thành Phố Hồ Chí Minh",
+          "align": "center"
+        },
+        "title": {
+          "text": "ĐƠN ĐỀ NGHỊ NHẬN LƯƠNG HƯU QUA TÀI KHOẢN",
+          "font_size": "18px",
+          "font_weight": "bold",
+          "text_transform": "uppercase",
+          "align": "center"
+        },
+        "layout": {
+          "type": "two-column",
+          "columns": 2,
+          "field_spacing": "12px",
+          "label_position": "left",
+          "label_width": "150px"
+        },
+        "colors": {
+          "primary": "#dc2626",
+          "text": "#374151",
+          "background": "#fefefe",
+          "border": "#9ca3af"
+        },
+        "footer": {
+          "show_signature_lines": true,
+          "signature_labels": [
+            {
+              "label": "Người đề nghị",
+              "position": "right"
+            },
+            {
+              "label": "Cán bộ tiếp nhận",
+              "position": "left"
+            }
+          ],
+          "show_date": true,
+          "notes": "Lưu ý: Vui lòng mang theo CCCD/CMND và sổ BHXH khi nộp đơn"
+        }
+      },
+      "ocr_metadata": {
+        "source_file": "don_luong_huu_scan_001.pdf",
+        "scan_date": "2025-10-25T14:30:00Z",
+        "ocr_engine": "Google Vision API",
+        "ocr_version": "v1.5",
+        "confidence_score": 0.94,
+        "language": "vi",
+        "page_count": 1,
+        "dimensions": {
+          "width": 2480,
+          "height": 3508,
+          "dpi": 300
+        },
+        "preprocessing": ["deskew", "denoise", "contrast_enhancement"]
+      },
       "fields": [
         {
           "name": "full_name",
           "label": "Họ và tên",
           "type": "string",
-          "required": true
+          "required": true,
+          "style": {
+            "width": "100%",
+            "input_style": "underline",
+            "font_weight": "bold"
+          },
+          "ocr_data": {
+            "extracted_text": "NGUYỄN VĂN THÀNH",
+            "confidence": 0.96,
+            "bbox": {
+              "x": 245,
+              "y": 380,
+              "width": 520,
+              "height": 45
+            },
+            "alternatives": [
+              {
+                "text": "NGUYEN VAN THANH",
+                "confidence": 0.92
+              }
+            ],
+            "requires_review": false
+          }
         },
         {
           "name": "dob",
           "label": "Ngày sinh",
           "type": "date",
-          "required": true
+          "required": true,
+          "style": {
+            "width": "200px",
+            "input_style": "underline"
+          },
+          "ocr_data": {
+            "extracted_text": "15/03/1958",
+            "confidence": 0.98,
+            "bbox": {
+              "x": 245,
+              "y": 450,
+              "width": 180,
+              "height": 42
+            },
+            "requires_review": false
+          }
         },
         {
           "name": "id_number",
           "label": "Số CCCD/CMND",
           "type": "string",
-          "required": true
+          "required": true,
+          "style": {
+            "width": "250px",
+            "input_style": "box",
+            "text_align": "center",
+            "font_weight": "600"
+          },
+          "ocr_data": {
+            "extracted_text": "079058001234",
+            "confidence": 0.89,
+            "bbox": {
+              "x": 920,
+              "y": 450,
+              "width": 280,
+              "height": 42
+            },
+            "alternatives": [
+              {
+                "text": "079058OO1234",
+                "confidence": 0.65
+              }
+            ],
+            "requires_review": true
+          }
         },
         {
           "name": "bank_name",
