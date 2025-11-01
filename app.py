@@ -22,6 +22,7 @@ from pydantic_settings import BaseSettings
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+from starlette.middleware.base import BaseHTTPMiddleware
 from tenacity import RetryError
 
 # Configure logging
@@ -475,6 +476,28 @@ Chỉ trả về JSON đúng schema "preview_response".
     """
 
 app = FastAPI(title="Elder-Friendly Form Pipeline", version="1.0.0")
+
+
+# Middleware to handle reverse proxy (Railway, nginx, etc.)
+class ProxyHeadersMiddleware(BaseHTTPMiddleware):
+    """Trust X-Forwarded-Proto and X-Forwarded-Host headers from reverse proxy"""
+
+    async def dispatch(self, request: Request, call_next):
+        # Trust X-Forwarded-Proto for HTTPS detection
+        forwarded_proto = request.headers.get("X-Forwarded-Proto")
+        if forwarded_proto:
+            request.scope["scheme"] = forwarded_proto
+
+        # Trust X-Forwarded-Host for correct host
+        forwarded_host = request.headers.get("X-Forwarded-Host")
+        if forwarded_host:
+            request.scope["server"] = (forwarded_host, None)
+
+        return await call_next(request)
+
+
+# Add proxy headers middleware FIRST (before other middlewares)
+app.add_middleware(ProxyHeadersMiddleware)
 
 # Add GZip compression middleware for better network performance
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)
