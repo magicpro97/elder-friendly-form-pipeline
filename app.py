@@ -7,9 +7,10 @@ import uuid
 from io import BytesIO
 from typing import Any
 
+import httpx
 import redis
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -39,7 +40,7 @@ load_dotenv()
 # Settings
 class Settings(BaseSettings):
     openai_api_key: str | None = None
-    openai_model: str = "o4-mini"
+    openai_model: str = "gpt-4o-mini"  # Fast chat model (~2-5s), not reasoning model
 
     # Redis configuration
     # Railway provides REDIS_URL in format redis://default:password@host:port
@@ -200,7 +201,7 @@ def get_session_manager():
 
 
 def get_client():
-    """Get OpenAI client with error handling"""
+    """Get OpenAI client with error handling and timeout"""
     if not OPENAI_OK:
         logger.warning("OpenAI library not installed")
         return None
@@ -208,15 +209,17 @@ def get_client():
         logger.warning("OPENAI_API_KEY not configured")
         return None
     try:
-        return OpenAI(api_key=settings.openai_api_key)
+        # Add timeout to prevent hanging
+        http_client = httpx.Client(timeout=15.0)  # 15s timeout for all requests
+        return OpenAI(api_key=settings.openai_api_key, http_client=http_client)
     except Exception as e:
         logger.error(f"Failed to initialize OpenAI client: {e}")
         return None
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+@retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=1, max=5), reraise=True)
 def call_openai_with_retry(client, **kwargs):
-    """Call OpenAI API with retry logic"""
+    """Call OpenAI API with retry logic (reduced attempts for faster fallback)"""
     try:
         return client.chat.completions.create(**kwargs)
     except Exception as e:
@@ -236,6 +239,9 @@ for f in FORMS:
     for a in f.get("aliases", []):
         ALIASES[a.lower()] = f["form_id"]
 
+# Cache for AI-generated questions (form_id -> questions)
+QUESTIONS_CACHE: dict[str, list[dict]] = {}
+
 
 def pick_form(text: str) -> str | None:
     t = (text or "").strip().lower()
@@ -248,6 +254,71 @@ def pick_form(text: str) -> str | None:
         if meta["title"].lower() in t:
             return fid
     return None
+
+
+def generate_fallback_questions(form_meta: dict) -> list[dict]:
+    """Generate simple fallback questions without AI (fast)"""
+    questions = []
+    for f in form_meta["fields"]:
+        ex = f.get("example")
+        optional_note = "" if f.get("required", True) else " (không bắt buộc, bác có thể bỏ qua)."
+
+        # Handle example - don't duplicate "Ví dụ:" prefix
+        if ex:
+            # Remove "Ví dụ:" prefix if it already exists in the example
+            ex_clean = ex.replace("Ví dụ:", "").replace("Ví dụ :", "").strip()
+            ex_part = f" Ví dụ: {ex_clean}."
+        else:
+            ex_clean = None
+            ex_part = ""
+
+        label_lower = f.get("label", "").lower()
+        ask = f"Bác cho cháu xin {label_lower} ạ.{optional_note}{ex_part}"
+        reprompt = f"Cháu xin phép chưa nghe rõ, bác nhắc lại {label_lower} giúp cháu với ạ."
+        # Store cleaned example without "Ví dụ:" prefix
+        questions.append({"name": f["name"], "ask": ask, "reprompt": reprompt, "example": ex_clean})
+    return questions
+
+
+async def generate_questions_async(form_id: str, form_meta: dict, session_id: str) -> None:
+    """Generate AI questions in background and update session"""
+    client = get_client()
+    if not client:
+        return
+
+    try:
+        logger.info(f"Background: Generating AI questions for form {form_id}, session {session_id}")
+        out = call_openai_with_retry(
+            client,
+            model=settings.openai_model,
+            messages=[
+                {"role": "system", "content": SYSTEM_ASK},
+                {
+                    "role": "user",
+                    "content": f"Form metadata:\n```json\n{json.dumps(form_meta, ensure_ascii=False)}\n```",
+                },
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": SCHEMA_QUESTIONS["name"], "schema": SCHEMA_QUESTIONS},
+            },
+        )
+        response_content = out.choices[0].message.content
+        parsed_response = json.loads(response_content)
+        questions = parsed_response["questions"]
+
+        # Cache for future sessions
+        QUESTIONS_CACHE[form_id] = questions
+        logger.info(f"Background: Cached {len(questions)} AI questions for form {form_id}")
+
+        # Update current session with AI questions
+        st = get_session_manager().get(session_id)
+        if st:
+            st["questions"] = questions
+            get_session_manager().update(session_id, st)
+            logger.info(f"Background: Updated session {session_id} with AI questions")
+    except (RetryError, Exception) as e:
+        logger.warning(f"Background AI question generation failed: {e}, session will use fallback")
 
 
 SCHEMA_QUESTIONS = {
@@ -386,8 +457,8 @@ def list_forms(request: Request):
 
 @app.post("/session/start")
 @limiter.limit("10/minute")
-def start_session(request: Request, req: StartReq):
-    """Start a new form session"""
+def start_session(request: Request, req: StartReq, background_tasks: BackgroundTasks):
+    """Start a new form session (optimized for fast response)"""
     try:
         fid = pick_form(req.form_query)
         if not fid or fid not in FORM_INDEX:
@@ -395,50 +466,29 @@ def start_session(request: Request, req: StartReq):
             raise HTTPException(400, "Không xác định được form. Vui lòng nêu rõ tên form.")
 
         sid = str(uuid.uuid4())
-        session_data = {"form_id": fid, "answers": {}, "field_idx": 0, "questions": None, "stage": "ask", "pending": {}}
-
         form_meta = FORM_INDEX[fid]
-        client = get_client()
 
-        if client:
-            try:
-                logger.info(f"Generating questions with OpenAI for form {fid}")
-                out = call_openai_with_retry(
-                    client,
-                    model=settings.openai_model,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_ASK},
-                        {
-                            "role": "user",
-                            "content": f"Form metadata:\n```json\n{json.dumps(form_meta, ensure_ascii=False)}\n```",
-                        },
-                    ],
-                    response_format={
-                        "type": "json_schema",
-                        "json_schema": {"name": SCHEMA_QUESTIONS["name"], "schema": SCHEMA_QUESTIONS},
-                    },
-                )
-                response_content = out.choices[0].message.content
-                parsed_response = json.loads(response_content)
-                questions = parsed_response["questions"]
-                logger.info(f"Generated {len(questions)} questions via OpenAI")
-            except (RetryError, Exception) as e:
-                logger.error(f"OpenAI question generation failed: {e}, using fallback")
-                client = None  # Fall back to default questions
+        # Check cache first for instant response
+        if fid in QUESTIONS_CACHE:
+            questions = QUESTIONS_CACHE[fid]
+            logger.info(f"Using cached questions for form {fid}")
+        else:
+            # Use fallback questions immediately for fast response
+            questions = generate_fallback_questions(form_meta)
+            logger.info(f"Using fallback questions for form {fid}, will upgrade in background")
 
-        if not client:
-            logger.info(f"Using fallback question generation for form {fid}")
-            questions = []
-            for f in form_meta["fields"]:
-                ex = f.get("example")
-                optional_note = "" if f.get("required", True) else " (không bắt buộc, bác có thể bỏ qua)."
-                ex_part = f" Ví dụ: {ex}." if ex else ""
-                label_lower = f.get("label", "").lower()
-                ask = f"Bác cho cháu xin {label_lower} ạ.{optional_note}{ex_part}"
-                reprompt = f"Cháu xin phép chưa nghe rõ, bác nhắc lại {label_lower} giúp cháu với ạ."
-                questions.append({"name": f["name"], "ask": ask, "reprompt": reprompt, "example": ex or None})
+            # Schedule AI generation in background (non-blocking)
+            background_tasks.add_task(generate_questions_async, fid, form_meta, sid)
 
-        session_data["questions"] = questions
+        session_data = {
+            "form_id": fid,
+            "answers": {},
+            "field_idx": 0,
+            "questions": questions,
+            "stage": "ask",
+            "pending": {},
+        }
+
         get_session_manager().create(sid, session_data)
 
         first = questions[0]

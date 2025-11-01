@@ -303,10 +303,13 @@ class FormAssistant {
     const suggestionsContainer = document.getElementById("suggestions");
     if (!suggestionsContainer || !example) return;
 
+    // Remove "Ví dụ:" prefix if exists (to avoid duplicating in chip)
+    const cleanExample = example.replace(/^Ví dụ:\s*/i, "").trim();
+
     // Create suggestion chips based on example
     suggestionsContainer.innerHTML = `
-      <div class="suggestion-chip" onclick="assistant.useSuggestion('${example}')">
-        ${example}
+      <div class="suggestion-chip" onclick="assistant.useSuggestion('${cleanExample}')">
+        ${cleanExample}
       </div>
     `;
   }
