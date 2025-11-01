@@ -267,13 +267,12 @@ def generate_fallback_questions(form_meta: dict) -> list[dict]:
         if ex:
             # Remove "Ví dụ:" prefix if it already exists in the example
             ex_clean = ex.replace("Ví dụ:", "").replace("Ví dụ :", "").strip()
-            ex_part = f" Ví dụ: {ex_clean}."
         else:
             ex_clean = None
-            ex_part = ""
 
         label_lower = f.get("label", "").lower()
-        ask = f"Bác cho cháu xin {label_lower} ạ.{optional_note}{ex_part}"
+        # Do NOT inline example into the ask; provide it separately to avoid duplicate "Ví dụ:" when rendering
+        ask = f"Bác cho cháu xin {label_lower} ạ.{optional_note}"
         reprompt = f"Cháu xin phép chưa nghe rõ, bác nhắc lại {label_lower} giúp cháu với ạ."
         # Store cleaned example without "Ví dụ:" prefix
         questions.append({"name": f["name"], "ask": ask, "reprompt": reprompt, "example": ex_clean})
@@ -493,6 +492,7 @@ def start_session(request: Request, req: StartReq, background_tasks: BackgroundT
 
         first = questions[0]
         first_field = form_meta["fields"][0]
+        total_fields = len(form_meta["fields"]) if form_meta.get("fields") else 0
         logger.info(f"Session {sid} created for form {fid}")
         return {
             "session_id": sid,
@@ -501,6 +501,9 @@ def start_session(request: Request, req: StartReq, background_tasks: BackgroundT
             "field": first["name"],
             "example": first.get("example"),
             "required": first_field.get("required", True),
+            "current_index": 1,
+            "total_fields": total_fields,
+            "progress": 0,
         }
 
     except HTTPException:
@@ -573,8 +576,19 @@ def question_next(request: Request, inp: TurnIn):
             return {"done": True, "message": "Đã thu thập đủ thông tin. Bạn có thể xem trước."}
 
         q = st["questions"][idx]
+        total = len(fields)
+        current_index = idx + 1
+        progress = int((idx / total) * 100) if total else 0
         logger.debug(f"Session {inp.session_id}: Next question for field {q['name']}")
-        return {"ask": q["ask"], "field": q["name"]}
+        return {
+            "ask": q["ask"],
+            "field": q["name"],
+            "example": q.get("example"),
+            "required": fields[idx].get("required", True),
+            "current_index": current_index,
+            "total_fields": total,
+            "progress": progress,
+        }
 
     except HTTPException:
         raise
@@ -616,7 +630,18 @@ def answer_field(request: Request, inp: AnswerReq):
             get_session_manager().update(inp.session_id, st)
             nxt = st["questions"][st["field_idx"]]
             logger.info(f"Session {inp.session_id}: Skipped optional field {field['name']}")
-            return {"ok": True, "ask": nxt["ask"], "field": nxt["name"], "example": nxt.get("example")}
+            total = len(fields)
+            current_index = st["field_idx"] + 1
+            progress = int((st["field_idx"] / total) * 100) if total else 0
+            return {
+                "ok": True,
+                "ask": nxt["ask"],
+                "field": nxt["name"],
+                "example": nxt.get("example"),
+                "current_index": current_index,
+                "total_fields": total,
+                "progress": progress,
+            }
 
         ok, msg, norm_val = _validate_field(field, answer_text)
 
@@ -668,12 +693,18 @@ def answer_field(request: Request, inp: AnswerReq):
         nxt = st["questions"][st["field_idx"]]
         next_field = fields[st["field_idx"]]
         logger.debug(f"Session {inp.session_id}: Answer accepted, moving to next field")
+        total = len(fields)
+        current_index = st["field_idx"] + 1
+        progress = int((st["field_idx"] / total) * 100) if total else 0
         return {
             "ok": True,
             "ask": nxt["ask"],
             "field": nxt["name"],
             "example": nxt.get("example"),
             "required": next_field.get("required", True),
+            "current_index": current_index,
+            "total_fields": total,
+            "progress": progress,
         }
 
     except HTTPException:
@@ -716,12 +747,18 @@ def confirm(request: Request, session_id: str = Query(...), yes: bool = Query(Tr
             nxt = st["questions"][st["field_idx"]]
             next_field = form["fields"][st["field_idx"]]
             logger.info(f"Session {session_id}: Value confirmed, moving to next field")
+            total = len(form["fields"])
+            current_index = st["field_idx"] + 1
+            progress = int((st["field_idx"] / total) * 100) if total else 0
             return {
                 "ok": True,
                 "ask": nxt["ask"],
                 "field": nxt["name"],
                 "example": nxt.get("example"),
                 "required": next_field.get("required", True),
+                "current_index": current_index,
+                "total_fields": total,
+                "progress": progress,
             }
         else:
             st["pending"] = {}
@@ -729,12 +766,18 @@ def confirm(request: Request, session_id: str = Query(...), yes: bool = Query(Tr
             get_session_manager().update(session_id, st)
             q = st["questions"][idx]
             logger.info(f"Session {session_id}: Value rejected, requesting re-entry")
+            total = len(form["fields"])
+            current_index = idx + 1
+            progress = int((idx / total) * 100) if total else 0
             return {
                 "ok": True,
                 "ask": q["ask"],
                 "field": q["name"],
                 "example": q.get("example"),
                 "required": field.get("required", True),
+                "current_index": current_index,
+                "total_fields": total,
+                "progress": progress,
             }
 
     except HTTPException:

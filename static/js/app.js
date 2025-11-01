@@ -113,8 +113,20 @@ class FormAssistant {
       this.sessionId = data.session_id;
       this.currentFieldRequired = data.required !== false;
       this.showChatInterface(formTitle);
+      if (
+        typeof data.current_index === "number" &&
+        typeof data.total_fields === "number"
+      ) {
+        this._progressInfo = {
+          current: data.current_index,
+          total: data.total_fields,
+        };
+      } else {
+        this._progressInfo = { current: 1, total: "?" };
+      }
       this.addMessage("assistant", data.ask, data.example);
       this.updateSkipButton();
+      this.updateProgress(data.progress || 0);
     } catch (error) {
       console.error("Error starting form:", error);
       this.showAlert(error.message, "error");
@@ -129,12 +141,15 @@ class FormAssistant {
         <div class="chat-header">
           <h2>${formTitle}</h2>
           <p class="text-secondary">Trả lời các câu hỏi bên dưới. Bạn có thể nói hoặc gõ câu trả lời.</p>
-          <div class="progress-bar">
-            <div class="progress-fill" id="progressBar" style="width: 0%"></div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap: var(--spacing-md);">
+            <div id="progressLabel" class="text-secondary" aria-live="polite">Câu 1/?</div>
+            <div class="progress-bar" aria-hidden="true">
+              <div class="progress-fill" id="progressBar" style="width: 0%"></div>
+            </div>
           </div>
         </div>
 
-        <div class="chat-messages" id="chatMessages">
+        <div class="chat-messages" id="chatMessages" role="log" aria-live="polite" aria-atomic="false">
           <!-- Messages will be added here -->
         </div>
 
@@ -154,6 +169,8 @@ class FormAssistant {
                 id="voiceBtn"
                 onclick="assistant.toggleVoiceInput()"
                 title="Nhấn để nói"
+                aria-label="Nhấn để nói"
+                aria-pressed="false"
               >
                 🎤
               </button>
@@ -195,11 +212,16 @@ class FormAssistant {
 
     const avatar = type === "assistant" ? "🤖" : "👤";
 
+    // Avoid duplicating example text if the assistant message already includes "Ví dụ: ..."
+    const hasInlineExample = /Ví dụ\s*:/i.test(text || "");
+    const hintInText = hint && (text || "").includes(hint);
+    const showHint = !!(hint && !hasInlineExample && !hintInText);
+
     messageDiv.innerHTML = `
       <div class="message-avatar">${avatar}</div>
       <div class="message-content">
         ${text}
-        ${hint ? `<div class="message-hint">Ví dụ: ${hint}</div>` : ""}
+        ${showHint ? `<div class="message-hint">Ví dụ: ${hint}</div>` : ""}
       </div>
     `;
 
@@ -285,6 +307,15 @@ class FormAssistant {
         this.currentFieldRequired = data.required !== false;
         this.updateSkipButton();
         this.addMessage("assistant", data.ask, data.example || null);
+        if (
+          typeof data.current_index === "number" &&
+          typeof data.total_fields === "number"
+        ) {
+          this._progressInfo = {
+            current: data.current_index,
+            total: data.total_fields,
+          };
+        }
         this.updateProgress(data.progress || 0);
       }
     } catch (error) {
@@ -308,7 +339,10 @@ class FormAssistant {
 
     // Create suggestion chips based on example
     suggestionsContainer.innerHTML = `
-      <div class="suggestion-chip" onclick="assistant.useSuggestion('${cleanExample}')">
+      <div class="suggestion-chip" role="button" tabindex="0" aria-label="Gợi ý: ${cleanExample}"
+           onclick="assistant.useSuggestion('${cleanExample}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){assistant.useSuggestion('${cleanExample}')}"
+      >
         ${cleanExample}
       </div>
     `;
@@ -389,6 +423,15 @@ class FormAssistant {
         this.currentFieldRequired = data.required !== false;
         this.updateSkipButton();
         this.addMessage("assistant", data.ask, data.example || null);
+        if (
+          typeof data.current_index === "number" &&
+          typeof data.total_fields === "number"
+        ) {
+          this._progressInfo = {
+            current: data.current_index,
+            total: data.total_fields,
+          };
+        }
         this.updateProgress(data.progress || 0);
       }
     } catch (error) {
@@ -454,6 +497,16 @@ class FormAssistant {
           this.currentFieldRequired = data.required !== false;
           this.updateSkipButton();
           this.addMessage("assistant", data.ask, data.example || null);
+          if (
+            typeof data.current_index === "number" &&
+            typeof data.total_fields === "number"
+          ) {
+            this._progressInfo = {
+              current: data.current_index,
+              total: data.total_fields,
+            };
+          }
+          this.updateProgress(data.progress || 0);
         }
       } else {
         // Value rejected, ask again
@@ -461,6 +514,16 @@ class FormAssistant {
           this.currentFieldRequired = data.required !== false;
           this.updateSkipButton();
           this.addMessage("assistant", data.ask, data.example || null);
+          if (
+            typeof data.current_index === "number" &&
+            typeof data.total_fields === "number"
+          ) {
+            this._progressInfo = {
+              current: data.current_index,
+              total: data.total_fields,
+            };
+          }
+          this.updateProgress(data.progress || 0);
         } else {
           this.addMessage(
             "assistant",
@@ -479,6 +542,11 @@ class FormAssistant {
     const progressBar = document.getElementById("progressBar");
     if (progressBar) {
       progressBar.style.width = `${percent}%`;
+    }
+    const label = document.getElementById("progressLabel");
+    if (label && this._progressInfo) {
+      const { current, total } = this._progressInfo;
+      label.textContent = `Câu ${current}/${total}`;
     }
   }
 
@@ -586,6 +654,8 @@ class FormAssistant {
     if (btn) {
       btn.classList.add("recording");
       btn.textContent = "🔴";
+      btn.setAttribute("aria-pressed", "true");
+      btn.setAttribute("aria-label", "Đang ghi âm, nhấn để dừng");
     }
     this.recognition.start();
   }
@@ -596,6 +666,8 @@ class FormAssistant {
     if (btn) {
       btn.classList.remove("recording");
       btn.textContent = "🎤";
+      btn.setAttribute("aria-pressed", "false");
+      btn.setAttribute("aria-label", "Nhấn để nói");
     }
     if (this.recognition) {
       this.recognition.stop();
@@ -627,10 +699,13 @@ class FormAssistant {
 
     document.body.appendChild(alertDiv);
 
+    const durations = { info: 3000, success: 3000, warning: 6000, error: 8000 };
+    const timeout = durations[type] ?? 3000;
+
     setTimeout(() => {
       alertDiv.style.animation = "fadeOut 0.3s ease";
       setTimeout(() => alertDiv.remove(), 300);
-    }, 3000);
+    }, timeout);
   }
 
   // Edit field (go back to specific question)

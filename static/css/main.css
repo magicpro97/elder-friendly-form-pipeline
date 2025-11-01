@@ -378,6 +378,11 @@ body {
   transform: scale(1.05);
 }
 
+.suggestion-chip:focus {
+  outline: 3px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
 /* Preview Section */
 .preview-container {
   background: var(--bg-primary);
