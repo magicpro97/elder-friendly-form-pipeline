@@ -51,3 +51,13 @@ repos:
         additional_dependencies: [types-redis]
         args: [--ignore-missing-imports, --no-strict-optional]
         exclude: ^tests/
+
+  # CSS Validation
+  - repo: local
+    hooks:
+      - id: validate-css
+        name: Validate CSS files
+        entry: .hooks/validate-css.sh
+        language: system
+        files: \.css$
+        pass_filenames: true
