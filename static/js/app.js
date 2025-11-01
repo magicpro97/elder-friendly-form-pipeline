@@ -7,12 +7,14 @@ class FormAssistant {
     this.currentFieldRequired = true;
     this.recognition = null;
     this.isRecording = false;
+    this.STORAGE_KEY = "elder_form_drafts"; // LocalStorage key for saved drafts
     this.init();
   }
 
   init() {
     this.setupVoiceRecognition();
     this.loadForms();
+    this.loadSavedDrafts();
     this.setupKeyboardShortcuts();
   }
 
@@ -104,6 +106,173 @@ class FormAssistant {
       .join("");
   }
 
+  // ===== DRAFT MANAGEMENT FUNCTIONS =====
+
+  // Load saved drafts from localStorage
+  loadSavedDrafts() {
+    const drafts = this.getSavedDrafts();
+    if (drafts.length === 0) return;
+
+    // Display saved drafts section on home page
+    const mainContent = document.getElementById("mainContent");
+    if (!mainContent) return;
+
+    const draftsSection = document.createElement("div");
+    draftsSection.className = "saved-drafts-section";
+    draftsSection.innerHTML = `
+      <h2 style="font-size: var(--font-large); margin-bottom: var(--spacing-md); color: var(--text-primary);">
+        📂 Form đã lưu (${drafts.length})
+      </h2>
+      <div class="drafts-container">
+        ${drafts
+          .map(
+            (draft) => `
+          <div class="draft-card">
+            <div class="draft-header">
+              <h3>${draft.formTitle}</h3>
+              <span class="draft-date">${this.formatDate(draft.savedAt)}</span>
+            </div>
+            <div class="draft-progress">
+              <div class="progress-bar-container">
+                <div class="progress-bar-fill" style="width: ${draft.progress || 0}%"></div>
+              </div>
+              <span class="draft-progress-text">${draft.answeredFields || 0}/${draft.totalFields || 0} câu đã trả lời</span>
+            </div>
+            <div class="draft-actions">
+              <button class="btn btn-primary" onclick="assistant.continueDraft('${draft.sessionId}')">
+                ▶️ Tiếp tục
+              </button>
+              <button class="btn btn-secondary" onclick="assistant.deleteDraft('${draft.sessionId}')">
+                🗑️ Xóa
+              </button>
+            </div>
+          </div>
+        `
+          )
+          .join("")}
+      </div>
+    `;
+
+    // Insert before forms section
+    const formsSection = mainContent.querySelector("h2");
+    if (formsSection) {
+      formsSection.parentElement.insertBefore(draftsSection, formsSection);
+    }
+  }
+
+  // Get all saved drafts from localStorage
+  getSavedDrafts() {
+    try {
+      const draftsJson = localStorage.getItem(this.STORAGE_KEY);
+      return draftsJson ? JSON.parse(draftsJson) : [];
+    } catch (error) {
+      console.error("Error loading drafts:", error);
+      return [];
+    }
+  }
+
+  // Save current session as draft
+  saveDraft(sessionData) {
+    try {
+      const drafts = this.getSavedDrafts();
+
+      // Check if draft already exists (update it)
+      const existingIndex = drafts.findIndex((d) => d.sessionId === this.sessionId);
+
+      const draft = {
+        sessionId: this.sessionId,
+        formId: this.currentFormId,
+        formTitle: sessionData.formTitle || "Form",
+        savedAt: new Date().toISOString(),
+        progress: sessionData.progress || 0,
+        answeredFields: sessionData.current_index || 0,
+        totalFields: sessionData.total_fields || 0,
+        answers: sessionData.answers || {},
+      };
+
+      if (existingIndex >= 0) {
+        drafts[existingIndex] = draft; // Update existing
+      } else {
+        drafts.push(draft); // Add new
+      }
+
+      // Keep only last 10 drafts
+      if (drafts.length > 10) {
+        drafts.splice(0, drafts.length - 10);
+      }
+
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(drafts));
+      console.log("Draft saved:", draft.sessionId);
+    } catch (error) {
+      console.error("Error saving draft:", error);
+    }
+  }
+
+  // Continue from saved draft
+  async continueDraft(sessionId) {
+    const drafts = this.getSavedDrafts();
+    const draft = drafts.find((d) => d.sessionId === sessionId);
+
+    if (!draft) {
+      this.showAlert("Không tìm thấy form đã lưu.", "error");
+      return;
+    }
+
+    // Restore session
+    this.sessionId = sessionId;
+    this.currentFormId = draft.formId;
+
+    // Show chat interface
+    this.showChatInterface(draft.formTitle, draft.totalFields);
+
+    // Add message showing we're continuing
+    this.addMessage(
+      "assistant",
+      `Chào bác! Chúng ta tiếp tục điền form "${draft.formTitle}". Bác đã trả lời ${draft.answeredFields}/${draft.totalFields} câu hỏi.`
+    );
+
+    // Load next question
+    await this.loadNextQuestion();
+  }
+
+  // Delete saved draft
+  deleteDraft(sessionId) {
+    if (!confirm("Bạn có chắc muốn xóa form đã lưu này?")) {
+      return;
+    }
+
+    try {
+      const drafts = this.getSavedDrafts();
+      const filtered = drafts.filter((d) => d.sessionId !== sessionId);
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(filtered));
+
+      // Reload page to refresh UI
+      window.location.reload();
+    } catch (error) {
+      console.error("Error deleting draft:", error);
+      this.showAlert("Không thể xóa form. Vui lòng thử lại.", "error");
+    }
+  }
+
+  // Format date for display
+  formatDate(isoString) {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "Vừa xong";
+    if (diffMins < 60) return `${diffMins} phút trước`;
+    if (diffHours < 24) return `${diffHours} giờ trước`;
+    if (diffDays < 7) return `${diffDays} ngày trước`;
+
+    return date.toLocaleDateString("vi-VN");
+  }
+
+  // ===== END DRAFT MANAGEMENT =====
+
   // Start form conversation
   async startForm(formId, formTitle) {
     this.currentFormId = formId;
@@ -147,6 +316,15 @@ class FormAssistant {
       this.addMessage("assistant", data.ask, data.example);
       this.updateSkipButton();
       this.updateProgress(data.progress || 0);
+
+      // Save initial draft
+      this.saveDraft({
+        formTitle: formTitle,
+        progress: data.progress || 0,
+        current_index: data.current_index || 1,
+        total_fields: data.total_fields,
+        answers: {},
+      });
     } catch (error) {
       console.error("Error starting form:", error);
       this.showAlert(error.message, "error");
@@ -467,6 +645,15 @@ class FormAssistant {
           };
         }
         this.updateProgress(data.progress || 0);
+
+        // Auto-save draft after each successful answer
+        this.saveDraft({
+          formTitle: data.form_title || "Form",
+          progress: data.progress || 0,
+          current_index: data.current_index,
+          total_fields: data.total_fields,
+          answers: {}, // Backend doesn't return answers in response, but we track progress
+        });
       }
     } catch (error) {
       console.error("Error sending answer:", error);
@@ -594,10 +781,25 @@ class FormAssistant {
         throw new Error(data.detail || "Không thể tải preview");
       }
 
+      // Delete draft when form is completed
+      this.deleteDraftSilently(this.sessionId);
+
       this.displayPreview(data.preview);
     } catch (error) {
       console.error("Error loading preview:", error);
       this.showAlert(error.message, "error");
+    }
+  }
+
+  // Delete draft without confirmation or page reload (silent)
+  deleteDraftSilently(sessionId) {
+    try {
+      const drafts = this.getSavedDrafts();
+      const filtered = drafts.filter((d) => d.sessionId !== sessionId);
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(filtered));
+      console.log("Draft deleted (form completed):", sessionId);
+    } catch (error) {
+      console.error("Error deleting draft:", error);
     }
   }
 
