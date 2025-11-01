@@ -10,6 +10,7 @@ openai==1.51.0
 redis==5.0.1
 tenacity==8.2.3
 slowapi==0.1.9
+orjson==3.10.7  # Fast JSON serialization for better performance
 
 # Testing
 pytest==7.4.3

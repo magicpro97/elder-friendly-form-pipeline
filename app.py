@@ -11,6 +11,7 @@ import httpx
 import redis
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -95,6 +96,9 @@ def get_redis_client() -> redis.Redis:
                 decode_responses=True,
                 socket_connect_timeout=5,
                 socket_timeout=5,
+                max_connections=50,  # Connection pool size
+                retry_on_timeout=True,
+                health_check_interval=30,  # Health check every 30s
             )
             logger.info(f"Connected to Redis via REDIS_URL: {settings.redis_url.split('@')[-1]}")
         else:
@@ -107,6 +111,9 @@ def get_redis_client() -> redis.Redis:
                 decode_responses=True,
                 socket_connect_timeout=5,
                 socket_timeout=5,
+                max_connections=50,  # Connection pool size
+                retry_on_timeout=True,
+                health_check_interval=30,  # Health check every 30s
             )
             logger.info(f"Connected to Redis at {settings.redis_host}:{settings.redis_port}")
 
@@ -152,7 +159,14 @@ class SessionManager:
     def create(self, session_id: str, data: dict[str, Any]) -> None:
         """Create new session with TTL"""
         key = self._key(session_id)
-        self.redis.setex(key, self.ttl, json.dumps(data, ensure_ascii=False))
+        # Use orjson for faster JSON serialization (falls back to standard json if not available)
+        try:
+            import orjson
+
+            serialized = orjson.dumps(data).decode("utf-8")
+        except ImportError:
+            serialized = json.dumps(data, ensure_ascii=False)
+        self.redis.setex(key, self.ttl, serialized)
         logger.info(f"Created session {session_id} with TTL {self.ttl}s")
 
     def get(self, session_id: str) -> dict[str, Any] | None:
@@ -162,7 +176,13 @@ class SessionManager:
         if data:
             # Refresh TTL on access
             self.redis.expire(key, self.ttl)
-            return json.loads(str(data))
+            # Use orjson for faster JSON deserialization
+            try:
+                import orjson
+
+                return orjson.loads(data)
+            except ImportError:
+                return json.loads(str(data))
         logger.warning(f"Session {session_id} not found or expired")
         return None
 
@@ -170,7 +190,13 @@ class SessionManager:
         """Update session data and refresh TTL"""
         key = self._key(session_id)
         if self.redis.exists(key):
-            self.redis.setex(key, self.ttl, json.dumps(data, ensure_ascii=False))
+            try:
+                import orjson
+
+                serialized = orjson.dumps(data).decode("utf-8")
+            except ImportError:
+                serialized = json.dumps(data, ensure_ascii=False)
+            self.redis.setex(key, self.ttl, serialized)
             logger.debug(f"Updated session {session_id}")
         else:
             raise HTTPException(404, "Session không tồn tại hoặc đã hết hạn.")
@@ -209,8 +235,15 @@ def get_client():
         logger.warning("OPENAI_API_KEY not configured")
         return None
     try:
-        # Add timeout to prevent hanging
-        http_client = httpx.Client(timeout=15.0)  # 15s timeout for all requests
+        # Add timeout to prevent hanging + connection pooling
+        http_client = httpx.Client(
+            timeout=15.0,  # 15s timeout for all requests
+            limits=httpx.Limits(
+                max_connections=10,  # Max concurrent connections
+                max_keepalive_connections=5,  # Keep-alive pool
+                keepalive_expiry=30.0,  # Keep connections alive for 30s
+            ),
+        )
         return OpenAI(api_key=settings.openai_api_key, http_client=http_client)
     except Exception as e:
         logger.error(f"Failed to initialize OpenAI client: {e}")
@@ -241,6 +274,9 @@ for f in FORMS:
 
 # Cache for AI-generated questions (form_id -> questions)
 QUESTIONS_CACHE: dict[str, list[dict]] = {}
+
+# Compile regex patterns once for better performance
+COMPILED_PATTERNS: dict[str, re.Pattern] = {}
 
 
 def pick_form(text: str) -> str | None:
@@ -410,6 +446,9 @@ Chỉ trả về JSON đúng schema "preview_response".
 
 app = FastAPI(title="Elder-Friendly Form Pipeline", version="1.0.0")
 
+# Add GZip compression middleware for better network performance
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)
+
 # Mount static files
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
@@ -444,7 +483,10 @@ class TurnIn(BaseModel):
 @app.get("/")
 async def index(request: Request):
     """Serve the main web interface"""
-    return templates.TemplateResponse("index.html", {"request": request})
+    response = templates.TemplateResponse("index.html", {"request": request})
+    # Add cache control for HTML (short-lived)
+    response.headers["Cache-Control"] = "public, max-age=300"  # 5 minutes
+    return response
 
 
 @app.get("/forms")
@@ -530,11 +572,16 @@ def _validate_field(field, value):
     for v in field.get("validators", []):
         t = v.get("type")
         if t == "regex":
-            if not re.match(v["pattern"], value):
+            pattern = v["pattern"]
+            # Use compiled pattern cache for better performance
+            if pattern not in COMPILED_PATTERNS:
+                COMPILED_PATTERNS[pattern] = re.compile(pattern)
+            if not COMPILED_PATTERNS[pattern].match(value):
                 return False, v.get("message") or "Dữ liệu chưa đúng định dạng.", value
         elif t == "length":
             mi, ma = int(v["min"]), int(v["max"])
-            if not (mi <= len(value) <= ma):
+            value_len = len(value)
+            if not (mi <= value_len <= ma):
                 return False, v.get("message") or f"Độ dài cần {mi}–{ma} ký tự.", value
         elif t == "numeric_range":
             try:
@@ -553,8 +600,13 @@ def _validate_field(field, value):
             max_d = dt.date.fromisoformat(v["max"])
             if not (min_d <= d <= max_d):
                 return False, v.get("message") or "Ngày ngoài khoảng cho phép.", value
-    if field.get("pattern") and not re.match(field["pattern"], value):
-        return False, f'{field.get("label", "Trường")} chưa đúng.', value
+    # Check field pattern
+    if field.get("pattern"):
+        pattern = field["pattern"]
+        if pattern not in COMPILED_PATTERNS:
+            COMPILED_PATTERNS[pattern] = re.compile(pattern)
+        if not COMPILED_PATTERNS[pattern].match(value):
+            return False, f'{field.get("label", "Trường")} chưa đúng.', value
     return True, "", value
 
 
