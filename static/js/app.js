@@ -13,6 +13,26 @@ class FormAssistant {
   init() {
     this.setupVoiceRecognition();
     this.loadForms();
+    this.setupKeyboardShortcuts();
+  }
+
+  // Setup global keyboard shortcuts
+  setupKeyboardShortcuts() {
+    document.addEventListener("keydown", (e) => {
+      // Ctrl/Cmd + M to toggle voice input
+      if ((e.ctrlKey || e.metaKey) && e.key === "m") {
+        e.preventDefault();
+        const voiceBtn = document.getElementById("voiceBtn");
+        if (voiceBtn) {
+          this.toggleVoiceInput();
+        }
+      }
+
+      // Escape to stop voice recording
+      if (e.key === "Escape" && this.isRecording) {
+        this.stopRecording();
+      }
+    });
   }
 
   // Setup Web Speech API for voice input
@@ -202,6 +222,20 @@ class FormAssistant {
         this.sendAnswer();
       }
     });
+
+    // Auto-scroll to bottom when new messages arrive
+    this.scrollToBottom();
+  }
+
+  // Scroll to bottom of chat
+  scrollToBottom(smooth = true) {
+    const messagesContainer = document.getElementById("chatMessages");
+    if (messagesContainer) {
+      messagesContainer.scrollTo({
+        top: messagesContainer.scrollHeight,
+        behavior: smooth ? "smooth" : "auto",
+      });
+    }
   }
 
   // Add message to chat
@@ -226,7 +260,7 @@ class FormAssistant {
     `;
 
     messagesContainer.appendChild(messageDiv);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    this.scrollToBottom();
 
     // Show suggestions if it's a question with example
     if (type === "assistant" && hint) {
@@ -251,7 +285,7 @@ class FormAssistant {
     `;
 
     messagesContainer.appendChild(typingDiv);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    this.scrollToBottom();
   }
 
   // Remove typing indicator

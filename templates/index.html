@@ -8,7 +8,10 @@
       content="Hệ thống điền form thân thiện với người cao tuổi"
     />
     <title>Hệ thống Điền Form - Dễ Dùng và Thân Thiện</title>
-    <link rel="stylesheet" href="/static/css/main.css" />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', path='/css/main.css') }}?v=20251103"
+    />
   </head>
   <body>
     <header class="header">
@@ -207,6 +210,6 @@
       <p>© 2025 Hệ thống Điền Form Thân Thiện | Designed for Elder Users</p>
     </footer>
 
-    <script src="/static/js/app.js?v=20251101"></script>
+    <script src="/static/js/app.js?v=20251103"></script>
   </body>
 </html>
