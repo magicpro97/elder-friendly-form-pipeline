@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from typing import Any
 
@@ -21,7 +22,7 @@ from pydantic_settings import BaseSettings
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
-from tenacity import RetryError, retry, stop_after_attempt, wait_exponential
+from tenacity import RetryError
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -226,33 +227,53 @@ def get_session_manager():
     return session_manager
 
 
+logger = logging.getLogger(__name__)
+
+# Singleton OpenAI client with connection pooling
+_openai_client = None
+_http_client = None
+_executor = ThreadPoolExecutor(max_workers=4)  # Thread pool for blocking OpenAI calls
+
+
 def get_client():
-    """Get OpenAI client with error handling and timeout"""
+    """Get singleton OpenAI client with persistent connection pooling"""
+    global _openai_client, _http_client
+
     if not OPENAI_OK:
         logger.warning("OpenAI library not installed")
         return None
     if not settings.openai_api_key:
         logger.warning("OPENAI_API_KEY not configured")
         return None
+
+    # Return existing client to reuse connections
+    if _openai_client is not None:
+        return _openai_client
+
     try:
-        # Add timeout to prevent hanging + connection pooling
-        http_client = httpx.Client(
-            timeout=15.0,  # 15s timeout for all requests
+        # Create persistent HTTP client with connection pooling (reused across all requests)
+        _http_client = httpx.Client(
+            timeout=10.0,  # 10s timeout (enough for gpt-4o-mini, fail fast)
             limits=httpx.Limits(
                 max_connections=10,  # Max concurrent connections
                 max_keepalive_connections=5,  # Keep-alive pool
-                keepalive_expiry=30.0,  # Keep connections alive for 30s
+                keepalive_expiry=60.0,  # Keep connections alive for 60s
             ),
         )
-        return OpenAI(api_key=settings.openai_api_key, http_client=http_client)
+        _openai_client = OpenAI(
+            api_key=settings.openai_api_key,
+            http_client=_http_client,
+            max_retries=0,  # No retries - fail fast
+        )
+        logger.info("Initialized singleton OpenAI client with connection pooling (no retries, 10s timeout)")
+        return _openai_client
     except Exception as e:
         logger.error(f"Failed to initialize OpenAI client: {e}")
         return None
 
 
-@retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=1, max=5), reraise=True)
 def call_openai_with_retry(client, **kwargs):
-    """Call OpenAI API with retry logic (reduced attempts for faster fallback)"""
+    """Call OpenAI API without retry - fail fast (OpenAI client already has max_retries=0)"""
     try:
         return client.chat.completions.create(**kwargs)
     except Exception as e:
@@ -316,28 +337,37 @@ def generate_fallback_questions(form_meta: dict) -> list[dict]:
 
 
 async def generate_questions_async(form_id: str, form_meta: dict, session_id: str) -> None:
-    """Generate AI questions in background and update session"""
+    """Generate AI questions in background (runs in thread pool to avoid blocking)"""
     client = get_client()
     if not client:
         return
 
     try:
         logger.info(f"Background: Generating AI questions for form {form_id}, session {session_id}")
-        out = call_openai_with_retry(
-            client,
-            model=settings.openai_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_ASK},
-                {
-                    "role": "user",
-                    "content": f"Form metadata:\n```json\n{json.dumps(form_meta, ensure_ascii=False)}\n```",
+
+        # Run blocking OpenAI call in thread pool to avoid blocking event loop
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        out = await loop.run_in_executor(
+            _executor,
+            lambda: call_openai_with_retry(
+                client,
+                model=settings.openai_model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_ASK},
+                    {
+                        "role": "user",
+                        "content": f"Form metadata:\n```json\n{json.dumps(form_meta, ensure_ascii=False)}\n```",
+                    },
+                ],
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {"name": SCHEMA_QUESTIONS["name"], "schema": SCHEMA_QUESTIONS},
                 },
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {"name": SCHEMA_QUESTIONS["name"], "schema": SCHEMA_QUESTIONS},
-            },
+            ),
         )
+
         response_content = out.choices[0].message.content
         parsed_response = json.loads(response_content)
         questions = parsed_response["questions"]
@@ -352,7 +382,7 @@ async def generate_questions_async(form_id: str, form_meta: dict, session_id: st
             st["questions"] = questions
             get_session_manager().update(session_id, st)
             logger.info(f"Background: Updated session {session_id} with AI questions")
-    except (RetryError, Exception) as e:
+    except Exception as e:
         logger.warning(f"Background AI question generation failed: {e}, session will use fallback")
 
 
