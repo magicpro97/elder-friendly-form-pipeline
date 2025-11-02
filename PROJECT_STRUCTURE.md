@@ -52,6 +52,7 @@ fastapi_form_pipeline/
 ## 🔑 Key Files
 
 ### Core Application
+
 - **`app.py`** (540 lines)
   - FastAPI app setup
   - SessionManager class (Redis)
@@ -61,6 +62,7 @@ fastapi_form_pipeline/
   - Error handling & logging
 
 ### Data & Config
+
 - **`forms/form_samples.json`**
   - 5 Vietnamese forms
   - Field definitions with validators
@@ -73,6 +75,7 @@ fastapi_form_pipeline/
   - PDF template
 
 ### Docker
+
 - **`docker-compose.yml`**
   - Redis service (persistent storage)
   - FastAPI app service
@@ -80,6 +83,7 @@ fastapi_form_pipeline/
   - Volume mounts
 
 ### Documentation
+
 - **`README.md`** - Start here
 - **`QUICKSTART.md`** - Get running in 1 minute
 - **`DEPLOYMENT.md`** - Production deployment
@@ -167,23 +171,28 @@ TTL: 3600 seconds (1 hour)
 ## 🔧 Technology Stack
 
 ### Backend
+
 - **FastAPI** 0.115.2 - Web framework
 - **Uvicorn** 0.30.6 - ASGI server
 - **Pydantic** 2.9.2 - Data validation
 
 ### Storage
+
 - **Redis** 7-alpine - Session storage
 - Python **redis** 5.0.1 - Client library
 
 ### AI
+
 - **OpenAI** 1.51.0 - LLM integration
 - **Tenacity** 8.2.3 - Retry logic
 
 ### PDF Generation
+
 - **WeasyPrint** 61.2 - HTML to PDF
 - **Jinja2** 3.1.4 - Templates
 
 ### DevOps
+
 - **Docker** - Containerization
 - **Docker Compose** - Multi-container orchestration
 
@@ -192,18 +201,21 @@ TTL: 3600 seconds (1 hour)
 ## 🚦 Health Checks
 
 ### Application Health
+
 ```bash
 curl http://localhost:8000/forms
 # Should return list of forms
 ```
 
 ### Redis Health
+
 ```bash
 docker exec fastapi_form_redis redis-cli ping
 # Should return: PONG
 ```
 
 ### Container Status
+
 ```bash
 docker-compose ps
 # Both services should be "Up (healthy)"
@@ -247,11 +259,11 @@ docker-compose ps
 
 ## 🎓 Learning Resources
 
-- FastAPI Docs: https://fastapi.tiangolo.com/
-- Redis Docs: https://redis.io/docs/
-- OpenAI API: https://platform.openai.com/docs/
-- WeasyPrint: https://doc.courtbouillon.org/weasyprint/
-- Docker Compose: https://docs.docker.com/compose/
+- FastAPI Docs: <https://fastapi.tiangolo.com/>
+- Redis Docs: <https://redis.io/docs/>
+- OpenAI API: <https://platform.openai.com/docs/>
+- WeasyPrint: <https://doc.courtbouillon.org/weasyprint/>
+- Docker Compose: <https://docs.docker.com/compose/>
 
 ---
 

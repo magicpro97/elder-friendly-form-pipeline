@@ -16,6 +16,7 @@ Pre-commit hooks đã được cài đặt thành công!
 Pre-commit sẽ tự động chạy khi bạn commit. Nếu có lỗi, commit sẽ bị chặn.
 
 Để chạy thủ công:
+
 ```bash
 pre-commit run --all-files
 ```
