@@ -1,9 +1,27 @@
 """Pytest configuration and fixtures."""
 
 import os
+import sys
+import types
 
 # Set environment variable to skip Redis connection in tests
 os.environ["TESTING"] = "true"
+
+# Provide a lightweight stub for WeasyPrint on platforms where native deps are missing (e.g., Windows CI/dev)
+try:
+    import weasyprint  # type: ignore
+except Exception:
+    stub = types.ModuleType("weasyprint")
+
+    class _StubHTML:  # minimal API used in tests; usually patched by tests
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def write_pdf(self, *args, **kwargs):  # pragma: no cover - not used in patched tests
+            return b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"  # minimal header
+
+    setattr(stub, "HTML", _StubHTML)
+    sys.modules["weasyprint"] = stub
 
 from unittest.mock import Mock, patch  # noqa: E402
 

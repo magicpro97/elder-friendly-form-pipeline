@@ -94,7 +94,11 @@ class FormAssistant {
     container.innerHTML = forms
       .map(
         (form) => `
-      <div class="form-card" onclick="assistant.startForm('${form.form_id}', '${form.title}')">
+      <div class="form-card" role="button" tabindex="0"
+           aria-label="Mở form ${form.title}"
+           onclick="assistant.startForm('${form.form_id}', '${form.title}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){assistant.startForm('${form.form_id}', '${form.title}')}"
+      >
         <h3>${form.title}</h3>
         <p class="form-card-description">Nhấn để bắt đầu điền form này</p>
         <div class="form-card-meta">
@@ -104,6 +108,13 @@ class FormAssistant {
     `
       )
       .join("");
+
+    // Update live status text if present
+    const status = document.getElementById("formsStatus");
+    if (status) {
+      const count = Array.isArray(forms) ? forms.length : 0;
+      status.textContent = `Đã tải ${count} form`;
+    }
   }
 
   // ===== DRAFT MANAGEMENT FUNCTIONS =====
