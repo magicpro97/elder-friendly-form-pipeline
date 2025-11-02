@@ -134,13 +134,16 @@ class FormAssistant {
   toggleFontSize() {
     const isEnlarged = document.body.classList.toggle("font-enlarged");
     localStorage.setItem(this.FONT_SIZE_KEY, isEnlarged ? "true" : "false");
-    
+
     const btn = document.getElementById("fontSizeToggle");
     if (btn) {
       btn.textContent = isEnlarged ? "🔍 Chữ nhỏ lại" : "🔍 Chữ to hơn";
-      btn.setAttribute("aria-label", isEnlarged ? "Thu nhỏ chữ" : "Phóng to chữ");
+      btn.setAttribute(
+        "aria-label",
+        isEnlarged ? "Thu nhỏ chữ" : "Phóng to chữ"
+      );
     }
-    
+
     this.trackEvent("font_size_toggle", { enlarged: isEnlarged });
   }
 
@@ -162,7 +165,7 @@ class FormAssistant {
     if (!this.allForms || this.allForms.length === 0) return;
 
     const searchTerm = query.toLowerCase().trim();
-    
+
     if (!searchTerm) {
       // Show all forms
       this.displayForms(this.allForms);
@@ -170,16 +173,19 @@ class FormAssistant {
     }
 
     // Filter by title or aliases
-    const filtered = this.allForms.filter(form => {
+    const filtered = this.allForms.filter((form) => {
       const titleMatch = form.title.toLowerCase().includes(searchTerm);
-      const aliasMatch = form.aliases && form.aliases.some(alias => 
-        alias.toLowerCase().includes(searchTerm)
-      );
+      const aliasMatch =
+        form.aliases &&
+        form.aliases.some((alias) => alias.toLowerCase().includes(searchTerm));
       return titleMatch || aliasMatch;
     });
 
     this.displayForms(filtered);
-    this.trackEvent("search_used", { query: searchTerm, results: filtered.length });
+    this.trackEvent("search_used", {
+      query: searchTerm,
+      results: filtered.length,
+    });
 
     // Show message if no results
     if (filtered.length === 0) {
@@ -203,20 +209,20 @@ class FormAssistant {
   trackRecentForm(formId, formTitle) {
     try {
       const recent = this.getRecentForms();
-      
+
       // Remove existing entry if present
-      const filtered = recent.filter(f => f.formId !== formId);
-      
+      const filtered = recent.filter((f) => f.formId !== formId);
+
       // Add to beginning
       filtered.unshift({
         formId,
         formTitle,
-        accessedAt: new Date().toISOString()
+        accessedAt: new Date().toISOString(),
       });
-      
+
       // Keep only last 5
       const limited = filtered.slice(0, 5);
-      
+
       localStorage.setItem(this.RECENT_FORMS_KEY, JSON.stringify(limited));
     } catch (error) {
       console.error("Error tracking recent form:", error);
@@ -248,18 +254,28 @@ class FormAssistant {
           🕐 Gần đây bác đã làm
         </h3>
         <div class="recent-forms-grid">
-          ${recent.map(form => `
+          ${recent
+            .map(
+              (form) => `
             <div class="recent-form-item" role="button" tabindex="0"
-                 onclick="assistant.startForm('${form.formId}', '${form.formTitle}')"
-                 onkeydown="if(event.key==='Enter'||event.key===' '){assistant.startForm('${form.formId}', '${form.formTitle}')}"
+                 onclick="assistant.startForm('${form.formId}', '${
+                form.formTitle
+              }')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){assistant.startForm('${
+                   form.formId
+                 }', '${form.formTitle}')}"
                  aria-label="Mở form ${form.formTitle}">
               <div class="recent-form-info">
                 <div class="recent-form-title">${form.formTitle}</div>
-                <div class="recent-form-time">${this.formatDate(form.accessedAt)}</div>
+                <div class="recent-form-time">${this.formatDate(
+                  form.accessedAt
+                )}</div>
               </div>
               <span style="font-size: 24px;">▶️</span>
             </div>
-          `).join('')}
+          `
+            )
+            .join("")}
         </div>
       </div>
     `;
@@ -275,7 +291,7 @@ class FormAssistant {
         startDate: new Date().toISOString(),
         events: {},
         errors: {},
-        buttonInteractions: {}
+        buttonInteractions: {},
       });
     }
   }
@@ -305,18 +321,18 @@ class FormAssistant {
     try {
       const analytics = this.getAnalytics();
       if (!analytics.events) analytics.events = {};
-      
+
       if (!analytics.events[eventName]) {
         analytics.events[eventName] = { count: 0, lastOccurred: null };
       }
-      
+
       analytics.events[eventName].count++;
       analytics.events[eventName].lastOccurred = new Date().toISOString();
-      
+
       if (metadata && Object.keys(metadata).length > 0) {
         analytics.events[eventName].metadata = metadata;
       }
-      
+
       this.saveAnalytics(analytics);
     } catch (error) {
       console.error("Error tracking event:", error);
@@ -328,15 +344,15 @@ class FormAssistant {
     try {
       const analytics = this.getAnalytics();
       if (!analytics.errors) analytics.errors = {};
-      
+
       if (!analytics.errors[errorType]) {
         analytics.errors[errorType] = { count: 0, lastMessage: null };
       }
-      
+
       analytics.errors[errorType].count++;
       analytics.errors[errorType].lastMessage = errorMessage.substring(0, 100); // Limit length
       analytics.errors[errorType].lastOccurred = new Date().toISOString();
-      
+
       this.saveAnalytics(analytics);
     } catch (error) {
       console.error("Error tracking error:", error);
@@ -348,20 +364,20 @@ class FormAssistant {
     try {
       const analytics = this.getAnalytics();
       if (!analytics.buttonInteractions) analytics.buttonInteractions = {};
-      
+
       if (!analytics.buttonInteractions[buttonType]) {
         analytics.buttonInteractions[buttonType] = { count: 0, sizes: {} };
       }
-      
+
       analytics.buttonInteractions[buttonType].count++;
-      
+
       if (buttonSize) {
         if (!analytics.buttonInteractions[buttonType].sizes[buttonSize]) {
           analytics.buttonInteractions[buttonType].sizes[buttonSize] = 0;
         }
         analytics.buttonInteractions[buttonType].sizes[buttonSize]++;
       }
-      
+
       this.saveAnalytics(analytics);
     } catch (error) {
       console.error("Error tracking button click:", error);
@@ -369,7 +385,6 @@ class FormAssistant {
   }
 
   // ===== END NEW FEATURES =====
-
 
   // Load available forms
   async loadForms() {
@@ -758,21 +773,30 @@ class FormAssistant {
     const showHint = !!(hint && !hasInlineExample && !hintInText);
 
     // Create unique ID for TTS button
-    const ttsId = `tts-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const ttsId = `tts-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
 
     messageDiv.innerHTML = `
       <div class="message-avatar">${avatar}</div>
       <div class="message-content">
         ${text}
         ${showHint ? `<div class="message-hint">Ví dụ: ${hint}</div>` : ""}
-        ${type === "assistant" && this.ttsAvailable ? `
-          <button class="tts-button" id="${ttsId}" 
-                  onclick="assistant.speakText('${text.replace(/'/g, "\\'")}', document.getElementById('${ttsId}'))"
+        ${
+          type === "assistant" && this.ttsAvailable
+            ? `
+          <button class="tts-button" id="${ttsId}"
+                  onclick="assistant.speakText('${text.replace(
+                    /'/g,
+                    "\\'"
+                  )}', document.getElementById('${ttsId}'))"
                   aria-label="Đọc câu hỏi"
                   title="Nhấn để nghe câu hỏi">
             🔊
           </button>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
     `;
 
