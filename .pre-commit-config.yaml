@@ -52,12 +52,12 @@ repos:
         args: [--ignore-missing-imports, --no-strict-optional]
         exclude: ^tests/
 
-  # CSS Validation
+  # CSS Validation (cross-platform Python script)
   - repo: local
     hooks:
       - id: validate-css
         name: Validate CSS files
-        entry: .hooks/validate-css.sh
+        entry: python .hooks/validate_css.py
         language: system
         files: \.css$
         pass_filenames: true
