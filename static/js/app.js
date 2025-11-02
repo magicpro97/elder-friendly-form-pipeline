@@ -8,14 +8,23 @@ class FormAssistant {
     this.recognition = null;
     this.isRecording = false;
     this.STORAGE_KEY = "elder_form_drafts"; // LocalStorage key for saved drafts
+    this.RECENT_FORMS_KEY = "elder_recent_forms"; // Recent forms access
+    this.ANALYTICS_KEY = "elder_analytics"; // Privacy-respecting analytics
+    this.FONT_SIZE_KEY = "elder_font_enlarged"; // Font size preference
+    this.allForms = []; // Store all forms for filtering
+    this.ttsUtterance = null; // Text-to-speech
     this.init();
   }
 
   init() {
     this.setupVoiceRecognition();
+    this.setupTextToSpeech();
+    this.loadFontSizePreference();
     this.loadForms();
     this.loadSavedDrafts();
+    this.loadRecentForms();
     this.setupKeyboardShortcuts();
+    this.initAnalytics();
   }
 
   // Setup global keyboard shortcuts
@@ -71,14 +80,307 @@ class FormAssistant {
     }
   }
 
+  // ===== NEW FEATURES =====
+
+  // Setup Text-to-Speech
+  setupTextToSpeech() {
+    if ("speechSynthesis" in window) {
+      this.ttsAvailable = true;
+    } else {
+      this.ttsAvailable = false;
+      console.warn("Text-to-speech not available in this browser");
+    }
+  }
+
+  // Read text aloud
+  speakText(text, button = null) {
+    if (!this.ttsAvailable) {
+      this.showAlert("Trình duyệt không hỗ trợ đọc văn bản", "warning");
+      return;
+    }
+
+    // Stop any ongoing speech
+    window.speechSynthesis.cancel();
+
+    if (button) {
+      button.classList.remove("speaking");
+    }
+
+    // Create utterance
+    this.ttsUtterance = new SpeechSynthesisUtterance(text);
+    this.ttsUtterance.lang = "vi-VN";
+    this.ttsUtterance.rate = 0.9; // Slightly slower for elderly
+    this.ttsUtterance.pitch = 1.0;
+
+    if (button) {
+      button.classList.add("speaking");
+      this.ttsUtterance.onend = () => {
+        button.classList.remove("speaking");
+      };
+    }
+
+    window.speechSynthesis.speak(this.ttsUtterance);
+    this.trackEvent("tts_used");
+  }
+
+  // Stop speech
+  stopSpeech() {
+    if (this.ttsAvailable) {
+      window.speechSynthesis.cancel();
+    }
+  }
+
+  // Font size toggle
+  toggleFontSize() {
+    const isEnlarged = document.body.classList.toggle("font-enlarged");
+    localStorage.setItem(this.FONT_SIZE_KEY, isEnlarged ? "true" : "false");
+    
+    const btn = document.getElementById("fontSizeToggle");
+    if (btn) {
+      btn.textContent = isEnlarged ? "🔍 Chữ nhỏ lại" : "🔍 Chữ to hơn";
+      btn.setAttribute("aria-label", isEnlarged ? "Thu nhỏ chữ" : "Phóng to chữ");
+    }
+    
+    this.trackEvent("font_size_toggle", { enlarged: isEnlarged });
+  }
+
+  // Load font size preference
+  loadFontSizePreference() {
+    const isEnlarged = localStorage.getItem(this.FONT_SIZE_KEY) === "true";
+    if (isEnlarged) {
+      document.body.classList.add("font-enlarged");
+      const btn = document.getElementById("fontSizeToggle");
+      if (btn) {
+        btn.textContent = "🔍 Chữ nhỏ lại";
+        btn.setAttribute("aria-label", "Thu nhỏ chữ");
+      }
+    }
+  }
+
+  // Filter forms by search query
+  filterForms(query) {
+    if (!this.allForms || this.allForms.length === 0) return;
+
+    const searchTerm = query.toLowerCase().trim();
+    
+    if (!searchTerm) {
+      // Show all forms
+      this.displayForms(this.allForms);
+      return;
+    }
+
+    // Filter by title or aliases
+    const filtered = this.allForms.filter(form => {
+      const titleMatch = form.title.toLowerCase().includes(searchTerm);
+      const aliasMatch = form.aliases && form.aliases.some(alias => 
+        alias.toLowerCase().includes(searchTerm)
+      );
+      return titleMatch || aliasMatch;
+    });
+
+    this.displayForms(filtered);
+    this.trackEvent("search_used", { query: searchTerm, results: filtered.length });
+
+    // Show message if no results
+    if (filtered.length === 0) {
+      const container = document.getElementById("formsContainer");
+      if (container) {
+        container.innerHTML = `
+          <div class="grid-full text-center p-xl">
+            <p style="font-size: var(--font-large); color: var(--text-secondary);">
+              ❌ Không tìm thấy form phù hợp với "${query}"
+            </p>
+            <button class="btn btn-secondary" onclick="document.getElementById('formSearch').value=''; assistant.filterForms('');">
+              Xem tất cả form
+            </button>
+          </div>
+        `;
+      }
+    }
+  }
+
+  // Track recent form access
+  trackRecentForm(formId, formTitle) {
+    try {
+      const recent = this.getRecentForms();
+      
+      // Remove existing entry if present
+      const filtered = recent.filter(f => f.formId !== formId);
+      
+      // Add to beginning
+      filtered.unshift({
+        formId,
+        formTitle,
+        accessedAt: new Date().toISOString()
+      });
+      
+      // Keep only last 5
+      const limited = filtered.slice(0, 5);
+      
+      localStorage.setItem(this.RECENT_FORMS_KEY, JSON.stringify(limited));
+    } catch (error) {
+      console.error("Error tracking recent form:", error);
+    }
+  }
+
+  // Get recent forms
+  getRecentForms() {
+    try {
+      const recent = localStorage.getItem(this.RECENT_FORMS_KEY);
+      return recent ? JSON.parse(recent) : [];
+    } catch (error) {
+      console.error("Error loading recent forms:", error);
+      return [];
+    }
+  }
+
+  // Load and display recent forms
+  loadRecentForms() {
+    const recent = this.getRecentForms();
+    if (recent.length === 0) return;
+
+    const section = document.getElementById("recentFormsSection");
+    if (!section) return;
+
+    section.innerHTML = `
+      <div class="recent-forms-container">
+        <h3 class="recent-forms-title">
+          🕐 Gần đây bác đã làm
+        </h3>
+        <div class="recent-forms-grid">
+          ${recent.map(form => `
+            <div class="recent-form-item" role="button" tabindex="0"
+                 onclick="assistant.startForm('${form.formId}', '${form.formTitle}')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){assistant.startForm('${form.formId}', '${form.formTitle}')}"
+                 aria-label="Mở form ${form.formTitle}">
+              <div class="recent-form-info">
+                <div class="recent-form-title">${form.formTitle}</div>
+                <div class="recent-form-time">${this.formatDate(form.accessedAt)}</div>
+              </div>
+              <span style="font-size: 24px;">▶️</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // Privacy-respecting analytics
+  initAnalytics() {
+    // Initialize analytics object if not exists
+    const analytics = this.getAnalytics();
+    if (!analytics.initialized) {
+      this.saveAnalytics({
+        initialized: true,
+        startDate: new Date().toISOString(),
+        events: {},
+        errors: {},
+        buttonInteractions: {}
+      });
+    }
+  }
+
+  // Get analytics data
+  getAnalytics() {
+    try {
+      const data = localStorage.getItem(this.ANALYTICS_KEY);
+      return data ? JSON.parse(data) : { initialized: false };
+    } catch (error) {
+      console.error("Error loading analytics:", error);
+      return { initialized: false };
+    }
+  }
+
+  // Save analytics data
+  saveAnalytics(data) {
+    try {
+      localStorage.setItem(this.ANALYTICS_KEY, JSON.stringify(data));
+    } catch (error) {
+      console.error("Error saving analytics:", error);
+    }
+  }
+
+  // Track event (no PII)
+  trackEvent(eventName, metadata = {}) {
+    try {
+      const analytics = this.getAnalytics();
+      if (!analytics.events) analytics.events = {};
+      
+      if (!analytics.events[eventName]) {
+        analytics.events[eventName] = { count: 0, lastOccurred: null };
+      }
+      
+      analytics.events[eventName].count++;
+      analytics.events[eventName].lastOccurred = new Date().toISOString();
+      
+      if (metadata && Object.keys(metadata).length > 0) {
+        analytics.events[eventName].metadata = metadata;
+      }
+      
+      this.saveAnalytics(analytics);
+    } catch (error) {
+      console.error("Error tracking event:", error);
+    }
+  }
+
+  // Track error (no PII)
+  trackError(errorType, errorMessage) {
+    try {
+      const analytics = this.getAnalytics();
+      if (!analytics.errors) analytics.errors = {};
+      
+      if (!analytics.errors[errorType]) {
+        analytics.errors[errorType] = { count: 0, lastMessage: null };
+      }
+      
+      analytics.errors[errorType].count++;
+      analytics.errors[errorType].lastMessage = errorMessage.substring(0, 100); // Limit length
+      analytics.errors[errorType].lastOccurred = new Date().toISOString();
+      
+      this.saveAnalytics(analytics);
+    } catch (error) {
+      console.error("Error tracking error:", error);
+    }
+  }
+
+  // Track button interaction (size, position)
+  trackButtonClick(buttonType, buttonSize) {
+    try {
+      const analytics = this.getAnalytics();
+      if (!analytics.buttonInteractions) analytics.buttonInteractions = {};
+      
+      if (!analytics.buttonInteractions[buttonType]) {
+        analytics.buttonInteractions[buttonType] = { count: 0, sizes: {} };
+      }
+      
+      analytics.buttonInteractions[buttonType].count++;
+      
+      if (buttonSize) {
+        if (!analytics.buttonInteractions[buttonType].sizes[buttonSize]) {
+          analytics.buttonInteractions[buttonType].sizes[buttonSize] = 0;
+        }
+        analytics.buttonInteractions[buttonType].sizes[buttonSize]++;
+      }
+      
+      this.saveAnalytics(analytics);
+    } catch (error) {
+      console.error("Error tracking button click:", error);
+    }
+  }
+
+  // ===== END NEW FEATURES =====
+
+
   // Load available forms
   async loadForms() {
     try {
       const response = await fetch("/forms");
       const data = await response.json();
+      this.allForms = data.forms; // Store for filtering
       this.displayForms(data.forms);
     } catch (error) {
       console.error("Error loading forms:", error);
+      this.trackError("form_load_error", error.message);
       this.showAlert(
         "Không thể tải danh sách form. Vui lòng thử lại.",
         "error"
@@ -94,7 +396,7 @@ class FormAssistant {
     container.innerHTML = forms
       .map(
         (form) => `
-      <div class="form-card" role="button" tabindex="0"
+      <div class="form-card" role="button" tabindex="0" data-form-id="${form.form_id}"
            aria-label="Mở form ${form.title}"
            onclick="assistant.startForm('${form.form_id}', '${form.title}')"
            onkeydown="if(event.key==='Enter'||event.key===' '){assistant.startForm('${form.form_id}', '${form.title}')}"
@@ -145,15 +447,23 @@ class FormAssistant {
             </div>
             <div class="draft-progress">
               <div class="progress-bar-container">
-                <div class="progress-bar-fill" style="width: ${draft.progress || 0}%"></div>
+                <div class="progress-bar-fill" style="width: ${
+                  draft.progress || 0
+                }%"></div>
               </div>
-              <span class="draft-progress-text">${draft.answeredFields || 0}/${draft.totalFields || 0} câu đã trả lời</span>
+              <span class="draft-progress-text">${draft.answeredFields || 0}/${
+              draft.totalFields || 0
+            } câu đã trả lời</span>
             </div>
             <div class="draft-actions">
-              <button class="btn btn-primary" onclick="assistant.continueDraft('${draft.sessionId}')">
+              <button class="btn btn-primary" onclick="assistant.continueDraft('${
+                draft.sessionId
+              }')">
                 ▶️ Tiếp tục
               </button>
-              <button class="btn btn-secondary" onclick="assistant.deleteDraft('${draft.sessionId}')">
+              <button class="btn btn-secondary" onclick="assistant.deleteDraft('${
+                draft.sessionId
+              }')">
                 🗑️ Xóa
               </button>
             </div>
@@ -188,7 +498,9 @@ class FormAssistant {
       const drafts = this.getSavedDrafts();
 
       // Check if draft already exists (update it)
-      const existingIndex = drafts.findIndex((d) => d.sessionId === this.sessionId);
+      const existingIndex = drafts.findIndex(
+        (d) => d.sessionId === this.sessionId
+      );
 
       const draft = {
         sessionId: this.sessionId,
@@ -288,6 +600,10 @@ class FormAssistant {
   async startForm(formId, formTitle) {
     this.currentFormId = formId;
 
+    // Track recent form access
+    this.trackRecentForm(formId, formTitle);
+    this.trackEvent("form_started", { formId });
+
     // Show loading
     const mainContent = document.getElementById("mainContent");
     mainContent.innerHTML = `
@@ -338,6 +654,7 @@ class FormAssistant {
       });
     } catch (error) {
       console.error("Error starting form:", error);
+      this.trackError("form_start_error", error.message);
       this.showAlert(error.message, "error");
     }
   }
@@ -440,11 +757,22 @@ class FormAssistant {
     const hintInText = hint && (text || "").includes(hint);
     const showHint = !!(hint && !hasInlineExample && !hintInText);
 
+    // Create unique ID for TTS button
+    const ttsId = `tts-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
     messageDiv.innerHTML = `
       <div class="message-avatar">${avatar}</div>
       <div class="message-content">
         ${text}
         ${showHint ? `<div class="message-hint">Ví dụ: ${hint}</div>` : ""}
+        ${type === "assistant" && this.ttsAvailable ? `
+          <button class="tts-button" id="${ttsId}" 
+                  onclick="assistant.speakText('${text.replace(/'/g, "\\'")}', document.getElementById('${ttsId}'))"
+                  aria-label="Đọc câu hỏi"
+                  title="Nhấn để nghe câu hỏi">
+            🔊
+          </button>
+        ` : ""}
       </div>
     `;
 
@@ -588,8 +916,12 @@ class FormAssistant {
 
     if (!answer) {
       this.showAlert("Vui lòng nhập câu trả lời", "warning");
+      this.trackEvent("validation_error", { type: "empty_answer" });
       return;
     }
+
+    // Track button click
+    this.trackButtonClick("send_answer", "primary");
 
     // Add user message
     this.addMessage("user", answer);
@@ -627,6 +959,7 @@ class FormAssistant {
       if (data.ok === false) {
         this.removeTyping();
         this.addMessage("assistant", data.message);
+        this.trackEvent("validation_error", { type: "invalid_input" });
         return;
       }
 
@@ -668,6 +1001,7 @@ class FormAssistant {
       }
     } catch (error) {
       console.error("Error sending answer:", error);
+      this.trackError("send_answer_error", error.message);
       this.removeTyping();
       this.showAlert(error.message, "error");
     } finally {

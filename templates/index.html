@@ -10,7 +10,7 @@
     <title>Hệ thống Điền Form - Dễ Dùng và Thân Thiện</title>
     <link
       rel="stylesheet"
-      href="{{ url_for('static', path='/css/main.css') }}?v=20251103"
+      href="{{ url_for('static', path='/css/main.css') }}?v=20251104"
     />
   </head>
   <body>
@@ -23,10 +23,25 @@
             Hệ thống hỗ trợ điền form thân thiện, có thể nói hoặc gõ
           </p>
           <div class="mb-lg">
-            <a href="#formsContainer" class="btn btn-primary btn-large" aria-label="Bắt đầu điền ngay, chuyển tới danh sách form">
+            <a
+              href="#formsContainer"
+              class="btn btn-primary btn-large"
+              aria-label="Bắt đầu điền ngay, chuyển tới danh sách form"
+            >
               ▶️ Bắt đầu điền ngay
             </a>
           </div>
+        </div>
+        <div class="header-controls">
+          <button
+            id="fontSizeToggle"
+            class="btn btn-secondary"
+            onclick="assistant.toggleFontSize()"
+            aria-label="Phóng to chữ"
+            title="Nhấn để chữ to hơn"
+          >
+            🔍 Chữ to hơn
+          </button>
         </div>
       </div>
     </header>
@@ -73,6 +88,22 @@
         <!-- Forms Selection -->
         <div>
           <h2 class="section-title">📝 Chọn Form Cần Điền</h2>
+          
+          <!-- Search Box -->
+          <div class="search-box-container mb-lg">
+            <input
+              type="search"
+              id="formSearch"
+              class="search-input"
+              placeholder="🔍 Tìm form... (ví dụ: xin việc, nghỉ phép)"
+              aria-label="Tìm kiếm form"
+              onkeyup="assistant.filterForms(this.value)"
+            />
+          </div>
+
+          <!-- Recent Forms Section (will be populated by JS) -->
+          <div id="recentFormsSection" class="mb-lg"></div>
+
           <div id="formsContainer" class="form-grid" role="list">
             <!-- Forms will be loaded here by JavaScript -->
             <div class="grid-full text-center p-xl">
@@ -81,7 +112,9 @@
                 <div class="loading-dot"></div>
                 <div class="loading-dot"></div>
               </div>
-              <p id="formsStatus" class="loading-text" aria-live="polite">Đang tải danh sách form...</p>
+              <p id="formsStatus" class="loading-text" aria-live="polite">
+                Đang tải danh sách form...
+              </p>
             </div>
           </div>
         </div>
@@ -103,6 +136,6 @@
       <p>© 2025 Hệ thống Điền Form Thân Thiện | Designed for Elder Users</p>
     </footer>
 
-    <script src="/static/js/app.js?v=20251103" defer></script>
+    <script src="/static/js/app.js?v=20251104" defer></script>
   </body>
 </html>
