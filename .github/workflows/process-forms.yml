@@ -3,7 +3,7 @@ name: Process Forms and Sync to Database
 on:
     # Trigger after daily crawler completes
     workflow_run:
-        workflows: ["Daily Vietnamese Form Crawler"]
+        workflows: ["Daily Crawler"]
         types:
             - completed
 
@@ -22,7 +22,7 @@ jobs:
 
         # Permissions for GitHub Actions bot
         permissions:
-            contents: write  # Allow git push
+            contents: write # Allow git push
 
         # Only run if crawler succeeded or manual trigger
         if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
