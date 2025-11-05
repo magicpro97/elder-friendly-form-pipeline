@@ -14,7 +14,7 @@ import json
 import logging
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -36,7 +36,7 @@ class FormMerger:
 
         self.similarity_threshold = 0.8  # 80% similarity = duplicate
 
-    def load_manual_forms(self) -> List[Dict[str, Any]]:
+    def load_manual_forms(self) -> list[dict[str, Any]]:
         """Load manually created forms from form_samples.json"""
         if not self.manual_forms_path.exists():
             logger.warning(f"Manual forms file not found: {self.manual_forms_path}")
@@ -59,7 +59,7 @@ class FormMerger:
             logger.error(f"Failed to load manual forms: {e}")
             return []
 
-    def load_crawled_forms(self) -> List[Dict[str, Any]]:
+    def load_crawled_forms(self) -> list[dict[str, Any]]:
         """Load crawled forms from individual JSON files"""
         if not self.crawled_forms_dir.exists():
             logger.warning(f"Crawled forms directory not found: {self.crawled_forms_dir}")
@@ -89,7 +89,7 @@ class FormMerger:
         """
         return SequenceMatcher(None, text1.lower(), text2.lower()).ratio()
 
-    def is_duplicate(self, form1: Dict[str, Any], form2: Dict[str, Any]) -> bool:
+    def is_duplicate(self, form1: dict[str, Any], form2: dict[str, Any]) -> bool:
         """
         Check if two forms are duplicates based on title similarity
 
@@ -123,7 +123,7 @@ class FormMerger:
 
         return False
 
-    def merge_form_metadata(self, manual: Dict[str, Any], crawled: Dict[str, Any]) -> Dict[str, Any]:
+    def merge_form_metadata(self, manual: dict[str, Any], crawled: dict[str, Any]) -> dict[str, Any]:
         """
         Merge metadata from crawled form into manual form
 
@@ -146,7 +146,9 @@ class FormMerger:
         logger.info(f"Merged: '{manual.get('title')}' + crawled version")
         return merged
 
-    def deduplicate_forms(self, manual_forms: List[Dict[str, Any]], crawled_forms: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def deduplicate_forms(
+        self, manual_forms: list[dict[str, Any]], crawled_forms: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """
         Deduplicate forms, prioritizing manual over crawled
 
@@ -183,7 +185,7 @@ class FormMerger:
                 merged_forms.append(crawled)
                 added_count += 1
 
-        logger.info(f"Deduplication complete:")
+        logger.info("Deduplication complete:")
         logger.info(f"  - Manual forms: {len(manual_forms)}")
         logger.info(f"  - Crawled forms: {len(crawled_forms)}")
         logger.info(f"  - Merged metadata: {merged_count}")
@@ -192,7 +194,7 @@ class FormMerger:
 
         return merged_forms
 
-    def merge(self) -> List[Dict[str, Any]]:
+    def merge(self) -> list[dict[str, Any]]:
         """
         Main merge function
 
@@ -217,7 +219,7 @@ class FormMerger:
 
         return merged_forms
 
-    def save_merged_forms(self, forms: List[Dict[str, Any]]) -> None:
+    def save_merged_forms(self, forms: list[dict[str, Any]]) -> None:
         """
         Save merged forms to output file
 
@@ -251,18 +253,10 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Merge manual and crawled forms")
-    parser.add_argument(
-        "--manual", "-m", default="forms/form_samples.json", help="Manual forms JSON file"
-    )
-    parser.add_argument(
-        "--crawled", "-c", default="forms/crawled_forms", help="Crawled forms directory"
-    )
-    parser.add_argument(
-        "--output", "-o", default="forms/all_forms.json", help="Output merged file"
-    )
-    parser.add_argument(
-        "--threshold", "-t", type=float, default=0.8, help="Similarity threshold (0.0-1.0)"
-    )
+    parser.add_argument("--manual", "-m", default="forms/form_samples.json", help="Manual forms JSON file")
+    parser.add_argument("--crawled", "-c", default="forms/crawled_forms", help="Crawled forms directory")
+    parser.add_argument("--output", "-o", default="forms/all_forms.json", help="Output merged file")
+    parser.add_argument("--threshold", "-t", type=float, default=0.8, help="Similarity threshold (0.0-1.0)")
 
     args = parser.parse_args()
 

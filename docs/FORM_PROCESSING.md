@@ -56,6 +56,7 @@ Automated pipeline to convert crawled Vietnamese forms into structured JSON defi
 **Purpose**: Convert raw crawled files into structured form definitions
 
 **Features**:
+
 - ✅ OCR text extraction (PDF, DOCX, DOC, XLS, XLSX)
 - ✅ AI-powered field detection using OpenAI GPT-4
 - ✅ Fallback to pattern matching if OpenAI unavailable
@@ -64,6 +65,7 @@ Automated pipeline to convert crawled Vietnamese forms into structured JSON defi
 - ✅ Metadata preservation (source URL, OCR confidence, keywords)
 
 **Usage**:
+
 ```bash
 # Process all files in crawler_output/
 python src/form_processor.py
@@ -76,6 +78,7 @@ python src/form_processor.py --file crawler_output/mau-don.pdf
 ```
 
 **Output Structure**:
+
 ```json
 {
   "form_id": "don_xin_viec",
@@ -102,6 +105,7 @@ python src/form_processor.py --file crawler_output/mau-don.pdf
 ```
 
 **AI Prompt Strategy**:
+
 - Model: `gpt-4o-mini` (fast, cost-effective)
 - Temperature: 0.1 (deterministic)
 - Max tokens: 2000
@@ -113,6 +117,7 @@ python src/form_processor.py --file crawler_output/mau-don.pdf
 **Purpose**: Merge manual and crawled forms, remove duplicates
 
 **Deduplication Strategy**:
+
 1. Calculate title similarity using `SequenceMatcher`
 2. If similarity ≥ 80% → considered duplicate
 3. Check alias overlap
@@ -120,6 +125,7 @@ python src/form_processor.py --file crawler_output/mau-don.pdf
 5. Merge metadata from crawled version
 
 **Usage**:
+
 ```bash
 # Merge forms (default paths)
 python src/form_merger.py
@@ -133,6 +139,7 @@ python src/form_merger.py \
 ```
 
 **Output**:
+
 ```json
 {
   "forms": [...],
@@ -150,6 +157,7 @@ python src/form_merger.py \
 **Purpose**: Fast, fuzzy search for Vietnamese forms
 
 **Search Features**:
+
 - ✅ Vietnamese text normalization (đ → d, á → a, etc.)
 - ✅ Keyword indexing for O(1) lookup
 - ✅ Fuzzy matching with relevance scoring
@@ -157,6 +165,7 @@ python src/form_merger.py \
 - ✅ Configurable minimum score (default: 0.3)
 
 **Relevance Scoring**:
+
 | Match Type | Score |
 |------------|-------|
 | Exact title match | 1.0 |
@@ -166,6 +175,7 @@ python src/form_merger.py \
 | Fuzzy similarity | 0.0-0.5 |
 
 **Usage**:
+
 ```bash
 # Search forms
 python src/form_search.py "đơn xin việc"
@@ -181,6 +191,7 @@ python src/form_search.py --list --source crawler
 ```
 
 **Example Output**:
+
 ```
 Search: 'đơn xin việc'
 Found: 2 results
@@ -289,11 +300,13 @@ jobs:
 ### FastAPI Endpoints
 
 **1. List All Forms**
+
 ```http
 GET /forms?source=all
 ```
 
 Response:
+
 ```json
 {
   "forms": [...],
@@ -306,11 +319,13 @@ Response:
 ```
 
 **2. Search Forms**
+
 ```http
 GET /forms/search?q=đơn+xin+việc&min_score=0.3&max=10
 ```
 
 Response:
+
 ```json
 {
   "query": "đơn xin việc",
@@ -327,11 +342,13 @@ Response:
 ```
 
 **3. Get Form by ID**
+
 ```http
 GET /forms/{form_id}
 ```
 
 Response:
+
 ```json
 {
   "form_id": "don_xin_viec",
@@ -372,11 +389,13 @@ similarity_threshold = 0.8  # Can be adjusted via CLI
 **Symptom**: Form processor returns empty fields
 
 **Causes**:
+
 1. OpenAI API key missing or invalid
 2. OCR extraction failed (insufficient text)
 3. File format not supported
 
 **Solutions**:
+
 ```bash
 # Check OCR extraction
 python -c "from src.ocr_validator import OCRValidator; \
@@ -395,10 +414,12 @@ python src/form_processor.py --file path/to/file.pdf
 **Symptom**: Same form appears twice in all_forms.json
 
 **Causes**:
+
 1. Title too different (< 80% similarity)
 2. No alias overlap
 
 **Solutions**:
+
 ```bash
 # Lower similarity threshold
 python src/form_merger.py --threshold 0.7
@@ -411,11 +432,13 @@ python src/form_merger.py --threshold 0.7
 **Symptom**: Search query returns 0 results
 
 **Causes**:
+
 1. Query too specific
 2. Vietnamese diacritics not normalized
 3. Min score too high
 
 **Solutions**:
+
 ```bash
 # Lower min score
 python src/form_search.py "query" --min-score 0.2
@@ -443,6 +466,7 @@ python src/form_search.py --list
 ### Optimization Tips
 
 1. **Parallel processing** (future enhancement):
+
    ```python
    from concurrent.futures import ProcessPoolExecutor
    with ProcessPoolExecutor(max_workers=4) as executor:
@@ -450,6 +474,7 @@ python src/form_search.py --list
    ```
 
 2. **Cache AI results** (avoid re-processing):
+
    ```python
    # Add to form_processor.py
    cache_file = f"cache/{file_hash}.json"

@@ -17,7 +17,7 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -49,7 +49,7 @@ class FormProcessor:
         self.openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
         # Initialize OpenAI client
-        self.client: Optional[OpenAI] = None
+        self.client: OpenAI | None = None
         if self.openai_api_key:
             try:
                 self.client = OpenAI(api_key=self.openai_api_key)
@@ -151,7 +151,7 @@ class FormProcessor:
 
         return form_id
 
-    def _extract_aliases(self, title: str, text: str) -> List[str]:
+    def _extract_aliases(self, title: str, text: str) -> list[str]:
         """
         Extract potential aliases from title and text
         """
@@ -185,7 +185,7 @@ class FormProcessor:
         return aliases[:3]
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
-    def _extract_fields_with_ai(self, text: str, title: str) -> List[Dict[str, Any]]:
+    def _extract_fields_with_ai(self, text: str, title: str) -> list[dict[str, Any]]:
         """
         Use OpenAI to extract form fields from Vietnamese text
 
@@ -278,7 +278,7 @@ CHỈ trả về JSON, không giải thích thêm."""
             logger.error(f"AI field extraction failed: {e}")
             return []
 
-    def _create_basic_fields(self, text: str) -> List[Dict[str, Any]]:
+    def _create_basic_fields(self, text: str) -> list[dict[str, Any]]:
         """
         Fallback: Create basic fields if AI extraction fails
         Based on common Vietnamese form patterns
@@ -331,7 +331,7 @@ CHỈ trả về JSON, không giải thích thêm."""
         logger.info(f"Created {len(fields)} basic fields from pattern matching")
         return fields
 
-    def process_file(self, file_path: Path, source_url: str = "") -> Optional[Dict[str, Any]]:
+    def process_file(self, file_path: Path, source_url: str = "") -> dict[str, Any] | None:
         """
         Process a single crawled file into structured form
 
@@ -423,7 +423,7 @@ CHỈ trả về JSON, không giải thích thêm."""
         # Capitalize first letter of each word
         return title.title()
 
-    def process_directory(self, input_dir: str = "crawler_output") -> List[Dict[str, Any]]:
+    def process_directory(self, input_dir: str = "crawler_output") -> list[dict[str, Any]]:
         """
         Process all files in crawler output directory
 
@@ -474,7 +474,7 @@ CHỈ trả về JSON, không giải thích thêm."""
         logger.info(f"Processed {len(forms)} forms from {input_dir}")
         return forms
 
-    def save_index(self, forms: List[Dict[str, Any]]) -> None:
+    def save_index(self, forms: list[dict[str, Any]]) -> None:
         """
         Save forms index (all forms in one file)
 
@@ -499,9 +499,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Process crawled forms into structured JSON")
-    parser.add_argument(
-        "--input", "-i", default="crawler_output", help="Input directory (default: crawler_output)"
-    )
+    parser.add_argument("--input", "-i", default="crawler_output", help="Input directory (default: crawler_output)")
     parser.add_argument(
         "--output", "-o", default="forms/crawled_forms", help="Output directory (default: forms/crawled_forms)"
     )
@@ -529,7 +527,7 @@ def main():
         processor.save_index(forms)
 
         print(f"\n{'='*60}")
-        print(f"Processing complete!")
+        print("Processing complete!")
         print(f"{'='*60}")
         print(f"Total forms: {len(forms)}")
         print(f"Output: {args.output}")

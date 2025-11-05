@@ -16,7 +16,7 @@ import re
 import unicodedata
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -28,8 +28,8 @@ class FormSearch:
 
     def __init__(self, forms_path: str = "forms/all_forms.json"):
         self.forms_path = Path(forms_path)
-        self.forms: List[Dict[str, Any]] = []
-        self.search_index: Dict[str, List[int]] = {}  # keyword -> form indices
+        self.forms: list[dict[str, Any]] = []
+        self.search_index: dict[str, list[int]] = {}  # keyword -> form indices
 
         self.load_forms()
         self.build_index()
@@ -129,7 +129,7 @@ class FormSearch:
 
         logger.info(f"Built search index with {len(self.search_index)} keywords")
 
-    def calculate_relevance(self, query: str, form: Dict[str, Any]) -> float:
+    def calculate_relevance(self, query: str, form: dict[str, Any]) -> float:
         """
         Calculate relevance score for a form
 
@@ -176,9 +176,7 @@ class FormSearch:
 
         return score
 
-    def search(
-        self, query: str, min_score: float = 0.3, max_results: int = 10
-    ) -> List[Dict[str, Any]]:
+    def search(self, query: str, min_score: float = 0.3, max_results: int = 10) -> list[dict[str, Any]]:
         """
         Search for forms matching query
 
@@ -203,7 +201,7 @@ class FormSearch:
                 candidate_indices.update(self.search_index[word])
 
         # Step 2: Score all forms (index + fuzzy)
-        results: List[Tuple[float, Dict[str, Any]]] = []
+        results: list[tuple[float, dict[str, Any]]] = []
 
         # Score candidates from index
         for idx in candidate_indices:
@@ -232,7 +230,7 @@ class FormSearch:
         logger.info(f"Search '{query}': {len(top_results)} results (min_score={min_score})")
         return top_results
 
-    def search_by_id(self, form_id: str) -> Dict[str, Any] | None:
+    def search_by_id(self, form_id: str) -> dict[str, Any] | None:
         """
         Get form by exact form_id
 
@@ -247,7 +245,7 @@ class FormSearch:
                 return form
         return None
 
-    def list_all(self, source: str | None = None) -> List[Dict[str, Any]]:
+    def list_all(self, source: str | None = None) -> list[dict[str, Any]]:
         """
         List all forms, optionally filtered by source
 

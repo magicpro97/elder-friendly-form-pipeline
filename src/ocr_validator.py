@@ -14,7 +14,7 @@ Features:
 import logging
 import mimetypes
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
