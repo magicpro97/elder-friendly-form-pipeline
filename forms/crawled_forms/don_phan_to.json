@@ -9,7 +9,7 @@
   "metadata": {
     "source_file": "mau-don-phan-to-co-huong-dan-cach-viet-don.docx",
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2015/09/mau-don-phan-to-co-huong-dan-cach-viet-don.docx",
-    "processed_at": "2025-11-05T14:40:38.246062",
+    "processed_at": "2025-11-05T15:07:55.428765",
     "ocr_confidence": 1.0,
     "ocr_method": "docx",
     "ocr_keywords": [
@@ -47,7 +47,7 @@
       "label": "Cấp ngày",
       "type": "date",
       "required": true,
-      "example": "01/01/2020"
+      "example": "01/01/2010"
     },
     {
       "name": "id_issue_place",
@@ -82,35 +82,35 @@
       "label": "Vụ án",
       "type": "string",
       "required": true,
-      "example": "Vụ án dân sự số 123"
+      "example": "Vụ án số 123/2023"
     },
     {
       "name": "plaintiff_name",
       "label": "Nguyên đơn",
       "type": "string",
       "required": true,
-      "example": "Trần Thị B"
+      "example": "Ông/Bà Trần Văn B"
     },
     {
       "name": "content",
       "label": "NỘI DUNG PHẢN TỐ",
       "type": "multiline",
       "required": true,
-      "example": "Tóm tắt diễn biến sự việc..."
+      "example": "Trình bày tóm tắt lại diễn biến sự việc dẫn tới tranh chấp"
     },
     {
       "name": "request",
       "label": "YÊU CẦU PHẢN TỐ",
       "type": "multiline",
       "required": true,
-      "example": "Thứ nhất, yêu cầu A; Thứ hai, yêu cầu B."
+      "example": "Đề nghị Quý Tòa án xem xét giải quyết những vấn đề sau"
     },
     {
       "name": "document_list",
       "label": "Danh mục tài liệu, chúng cứ kèm theo (nếu có)",
       "type": "multiline",
       "required": false,
-      "example": "Tài liệu 1; Tài liệu 2."
+      "example": "Tài liệu 1, Tài liệu 2"
     }
   ]
 }
