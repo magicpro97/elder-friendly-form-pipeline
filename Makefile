@@ -24,6 +24,13 @@ help:
 	@echo "Maintenance:"
 	@echo "  make backup      - Backup Redis data"
 	@echo "  make ps          - Show running containers"
+	@echo ""
+	@echo "Crawler Commands:"
+	@echo "  make crawler-install  - Install crawler dependencies"
+	@echo "  make crawler-test     - Test crawler locally (single URL)"
+	@echo "  make crawler-run      - Run crawler with full config"
+	@echo "  make crawler-results  - View crawler results"
+	@echo "  make crawler-clean    - Clean crawler output"
 
 build:
 	docker-compose build
@@ -106,3 +113,27 @@ shell:
 
 redis-cli:
 	docker exec -it fastapi_form_redis redis-cli
+
+# Crawler commands
+crawler-install:
+	pip install -r requirements-crawler.txt
+
+crawler-test:
+	python3 test_crawler_local.py
+
+crawler-run:
+	python3 src/vietnamese_form_crawler.py
+
+crawler-results:
+	@echo "=== CSV Results ==="
+	@cat crawler_output/downloaded_files.csv 2>/dev/null || echo "No CSV file found"
+	@echo ""
+	@echo "=== Downloaded Files ==="
+	@ls -lh crawler_output/*.{pdf,doc,docx,xlsx,xls} 2>/dev/null || echo "No files downloaded"
+	@echo ""
+	@echo "=== Recent Logs ==="
+	@tail -20 crawler_output/crawler.log 2>/dev/null || echo "No log file found"
+
+crawler-clean:
+	rm -rf crawler_output/*
+	mkdir -p crawler_output

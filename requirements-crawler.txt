@@ -1,0 +1,13 @@
+# Crawler dependencies
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=5.1.0
+python-dotenv>=1.0.0
+python-dateutil>=2.8.2
+
+# Anti-bot protection
+cloudscraper>=1.2.71
+
+# Optional: for advanced crawling
+selenium>=4.15.0  # If you need JavaScript rendering
+scrapy>=2.11.0    # If you need a full crawler framework
