@@ -1,13 +1,16 @@
 # Form Processing Quick Start
 
-## 🚀 Phương án 1.5 đã được implement
+## 🚀 Phương án 1.5 + PostgreSQL Integration
 
-Pipeline tự động để xử lý forms từ crawler thành cấu trúc JSON tương thích với hệ thống.
+Pipeline tự động để xử lý forms từ crawler, lưu vào PostgreSQL, và tích hợp với FastAPI app.
 
 ## Kiến trúc
 
 ```
-Crawler → Form Processor → Form Merger → Form Search → API
+Crawler → Form Processor → Form Merger → PostgreSQL (Railway) → FastAPI App
+                                              ↓
+                                       GitHub Actions
+                                       (Auto-sync daily)
 ```
 
 ## Cài đặt nhanh
@@ -132,7 +135,7 @@ Found: 2 results
 
 ## Workflow Integration
 
-### Manual Workflow
+### Manual Workflow (Local)
 
 ```bash
 # 1. Crawl forms
@@ -141,39 +144,72 @@ make crawler-run
 # 2. Process + merge
 make forms-pipeline
 
-# 3. Search to verify
+# 3. Sync to PostgreSQL
+python src/sync_to_db.py
+
+# 4. Search to verify
 make forms-search Q="đơn"
 ```
 
-### Automated (GitHub Actions)
+### Automated Workflow (GitHub Actions)
 
-Workflow `.github/workflows/process-forms.yml` (TODO):
+**Tự động chạy hàng ngày sau khi crawler hoàn thành:**
 
-- Trigger sau khi Daily Crawler hoàn thành
-- Auto-process forms
-- Auto-merge với manual forms
-- Commit changes
-- Notify qua GitHub Issues
+1. Download crawler artifacts
+2. Process forms (OCR + AI)
+3. Merge with manual forms
+4. **Sync to Railway PostgreSQL**
+5. Commit changes to repo
+6. Create summary report
 
-## API Integration (TODO)
+**Trigger manually**: GitHub Actions → "Process Forms and Sync to Database" → Run workflow
 
-Endpoints cần thêm vào `app.py`:
+### API Endpoints (NEW)
 
-```python
-@app.get("/forms/search")
-def search_forms(q: str, min_score: float = 0.3):
-    """Search forms by query"""
-    from src.form_search import FormSearch
-    searcher = FormSearch()
-    return searcher.search(q, min_score=min_score)
+App hiện query forms trực tiếp từ PostgreSQL:
 
-@app.get("/forms/{form_id}")
-def get_form(form_id: str):
-    """Get form by ID"""
-    from src.form_search import FormSearch
-    searcher = FormSearch()
-    return searcher.search_by_id(form_id)
+```bash
+# List all forms
+curl https://your-app.railway.app/api/forms
+
+# Search forms
+curl "https://your-app.railway.app/api/forms/search?q=đơn xin việc"
+
+# Get specific form
+curl https://your-app.railway.app/api/forms/don_xin_viec
 ```
+
+## PostgreSQL Setup
+
+### Quick Start
+
+```bash
+# 1. Create PostgreSQL on Railway dashboard
+# 2. Copy DATABASE_URL
+
+# 3. Add to GitHub Secrets
+RAILWAY_DATABASE_URL=postgresql://...
+
+# 4. Initialize schema (first time only)
+python src/sync_to_db.py --init-schema
+
+# 5. Sync forms
+python src/sync_to_db.py
+```
+
+### Environment Variables
+
+```bash
+# .env (local development)
+DATABASE_URL=postgresql://user:password@host:port/database
+USE_POSTGRES=true
+
+# Railway (production)
+DATABASE_URL=postgresql://...  # Auto-set by Railway
+USE_POSTGRES=true
+```
+
+**See full guide**: [docs/POSTGRESQL_SETUP.md](docs/POSTGRESQL_SETUP.md)
 
 ## Performance
 
@@ -184,7 +220,8 @@ def get_form(form_id: str):
 | AI field detection | ~2s | OpenAI GPT-4o-mini |
 | Pattern matching (fallback) | ~0.01s | Regex |
 | Merge (5+1 forms) | ~0.1s | SequenceMatcher |
-| Search (100 forms) | ~0.05s | Indexed lookup |
+| Search (PostgreSQL) | ~20ms | Indexed with trigram |
+| Search (JSON fallback) | ~50ms | In-memory fuzzy |
 
 ## Troubleshooting
 
@@ -216,18 +253,10 @@ python src/form_merger.py --threshold 0.7
 
 ## Documentation
 
-- [Full Documentation](docs/FORM_PROCESSING.md)
+- **[PostgreSQL Setup Guide](docs/POSTGRESQL_SETUP.md)** - Railway integration, API endpoints
+- **[Form Processing Pipeline](docs/FORM_PROCESSING.md)** - Full pipeline details
 - [Crawler Documentation](docs/CRAWLER_OCR.md)
 - [Vietnamese Crawler](docs/VIETNAMESE_CRAWLER.md)
-
-## Next Steps
-
-- [ ] Add API endpoints to `app.py`
-- [ ] Create GitHub Actions workflow
-- [ ] Add manual review interface
-- [ ] Implement Redis caching for search
-- [ ] Add field validation
-- [ ] Auto-generate validators
 
 ## Status
 
@@ -236,8 +265,21 @@ python src/form_merger.py --threshold 0.7
 - Form Processor with AI + fallback
 - Form Merger with deduplication
 - Form Search with fuzzy matching
+- **PostgreSQL integration with Railway**
+- **GitHub Actions auto-sync workflow**
+- **API endpoints (/api/forms, /api/forms/search, /api/forms/{id})**
 - Documentation
 - Makefile commands
+- Local testing successful
+
+## Next Steps (Optional)
+
+- [ ] Add `RAILWAY_DATABASE_URL` secret to GitHub
+- [ ] Run manual GitHub Actions workflow to test
+- [ ] Add manual review interface for AI-extracted fields
+- [ ] Implement Redis caching for API responses
+- [ ] Add field validation patterns
+- [ ] Create admin dashboard
 - Local testing successful
 
 ⏳ **In Progress**:

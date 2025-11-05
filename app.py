@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     redis_db: int = 0
     redis_password: str | None = None
 
+    # PostgreSQL configuration
+    # Railway provides DATABASE_URL in format postgresql://user:password@host:port/database
+    database_url: str | None = None
+    use_postgres: bool = True  # If False, fallback to JSON files
+
     session_ttl_seconds: int = 3600  # 1 hour
     pdf_template: str = "generic_form.html"
 
@@ -287,12 +292,80 @@ def load_forms():
         return json.load(f)["forms"]
 
 
-FORMS = load_forms()
-FORM_INDEX = {f["form_id"]: f for f in FORMS}
-ALIASES = {}
-for f in FORMS:
-    for a in f.get("aliases", []):
-        ALIASES[a.lower()] = f["form_id"]
+# Form loading with PostgreSQL fallback
+def load_forms_from_source():
+    """
+    Load forms from PostgreSQL or fallback to JSON
+
+    Returns:
+        List of form dictionaries
+    """
+    # Try PostgreSQL first if enabled
+    if settings.use_postgres and settings.database_url:
+        try:
+            from src.form_repository import get_form_repository
+
+            repo = get_form_repository()
+            forms = repo.get_all_forms()
+            logger.info(f"Loaded {len(forms)} forms from PostgreSQL")
+            return forms
+        except Exception as e:
+            logger.warning(f"Failed to load forms from PostgreSQL, falling back to JSON: {e}")
+
+    # Fallback to JSON file
+    logger.info("Loading forms from JSON file")
+    return load_forms()
+
+
+def get_form_index_from_source():
+    """
+    Build form index from PostgreSQL or JSON
+
+    Returns:
+        Dictionary of {form_id: form_data}
+    """
+    if settings.use_postgres and settings.database_url:
+        try:
+            from src.form_repository import get_form_repository
+
+            repo = get_form_repository()
+            return repo.get_form_index()
+        except Exception:
+            pass
+
+    # Fallback
+    forms = load_forms()
+    return {f["form_id"]: f for f in forms}
+
+
+def get_aliases_from_source():
+    """
+    Build aliases map from PostgreSQL or JSON
+
+    Returns:
+        Dictionary of {alias: form_id}
+    """
+    if settings.use_postgres and settings.database_url:
+        try:
+            from src.form_repository import get_form_repository
+
+            repo = get_form_repository()
+            return repo.get_aliases_map()
+        except Exception:
+            pass
+
+    # Fallback
+    forms = load_forms()
+    aliases = {}
+    for f in forms:
+        for a in f.get("aliases", []):
+            aliases[a.lower()] = f["form_id"]
+    return aliases
+
+
+FORMS = load_forms_from_source()
+FORM_INDEX = get_form_index_from_source()
+ALIASES = get_aliases_from_source()
 
 # Cache for AI-generated questions (form_id -> questions)
 QUESTIONS_CACHE: dict[str, list[dict]] = {}
@@ -989,3 +1062,140 @@ def export_pdf(request: Request, session_id: str):
     except Exception as e:
         logger.error(f"Error in export_pdf: {e}", exc_info=True)
         raise HTTPException(500, "Đã xảy ra lỗi khi tạo PDF. Vui lòng thử lại.") from e
+
+
+# =============================================================================
+# Form Management API Endpoints
+# =============================================================================
+
+
+@app.get("/api/forms")
+@limiter.limit("60/minute")
+def list_forms_api(request: Request, source: str | None = None):
+    """
+    List all available forms
+
+    Args:
+        source: Optional filter by source ('manual' or 'crawler')
+
+    Returns:
+        JSON with forms list and metadata
+    """
+    try:
+        if settings.use_postgres and settings.database_url:
+            from src.form_repository import get_form_repository
+
+            repo = get_form_repository()
+            forms = repo.get_all_forms(source=source)
+        else:
+            # Fallback to in-memory FORMS
+            if source:
+                forms = [f for f in FORMS if f.get("source") == source]
+            else:
+                forms = FORMS
+
+        return {"ok": True, "count": len(forms), "source_filter": source, "forms": forms}
+
+    except Exception as e:
+        logger.error(f"Failed to list forms: {e}", exc_info=True)
+        raise HTTPException(500, "Không thể tải danh sách forms")
+
+
+@app.get("/api/forms/search")
+@limiter.limit("60/minute")
+def search_forms_api(
+    request: Request,
+    q: str = Query(..., min_length=1, description="Search query"),
+    min_score: float = Query(0.3, ge=0.0, le=1.0),
+    max_results: int = Query(10, ge=1, le=50),
+):
+    """
+    Search forms with Vietnamese fuzzy matching
+
+    Args:
+        q: Search query
+        min_score: Minimum relevance score (0.0-1.0)
+        max_results: Maximum number of results (1-50)
+
+    Returns:
+        JSON with search results and relevance scores
+    """
+    try:
+        if settings.use_postgres and settings.database_url:
+            from src.form_repository import get_form_repository
+
+            repo = get_form_repository()
+            results = repo.search_forms(q, min_score, max_results)
+        else:
+            # Fallback to basic search using FORM_INDEX
+            from src.form_search import FormSearch
+
+            searcher = FormSearch()
+            results = searcher.search(q, min_score, max_results)
+
+        return {"ok": True, "query": q, "count": len(results), "results": results}
+
+    except Exception as e:
+        logger.error(f"Search failed for query '{q}': {e}", exc_info=True)
+        raise HTTPException(500, "Tìm kiếm thất bại")
+
+
+@app.get("/api/forms/{form_id}")
+@limiter.limit("60/minute")
+def get_form_api(request: Request, form_id: str):
+    """
+    Get detailed information about a specific form
+
+    Args:
+        form_id: Form ID to retrieve
+
+    Returns:
+        JSON with form details including fields
+    """
+    try:
+        if settings.use_postgres and settings.database_url:
+            from src.form_repository import get_form_repository
+
+            repo = get_form_repository()
+            form = repo.get_form_by_id(form_id)
+        else:
+            # Fallback to FORM_INDEX
+            form = FORM_INDEX.get(form_id)
+
+        if not form:
+            raise HTTPException(404, f"Form '{form_id}' không tồn tại")
+
+        return {"ok": True, "form": form}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get form {form_id}: {e}", exc_info=True)
+        raise HTTPException(500, "Không thể tải thông tin form")
+
+
+# =============================================================================
+# Application Lifecycle
+# =============================================================================
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    """Cleanup on application shutdown"""
+    logger.info("Application shutting down...")
+
+    # Close PostgreSQL connection
+    if settings.use_postgres and settings.database_url:
+        try:
+            from src.form_repository import close_repository
+
+            close_repository()
+            logger.info("Closed PostgreSQL connection")
+        except Exception as e:
+            logger.warning(f"Failed to close PostgreSQL: {e}")
+
+    # Close OpenAI HTTP client
+    global _http_client
+    if _http_client:
+        _http_client.close()
+        logger.info("Closed OpenAI HTTP client")
