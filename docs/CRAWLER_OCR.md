@@ -56,9 +56,9 @@ ENABLE_OCR=false python src/vietnamese_form_crawler.py
 ```
 Download File
     ↓
-Detect File Type (.pdf, .docx, .jpg, etc.)
+Detect File Type (.pdf, .docx, .xls, .xlsx)
     ↓
-Extract Text (PyPDF2, python-docx, pytesseract)
+Extract Text (PyPDF2, python-docx, openpyxl)
     ↓
 Search for Vietnamese Keywords
     ↓
@@ -76,9 +76,10 @@ Save to CSV with validation results
 | `.pdf` (text) | Text extraction | PyPDF2 |
 | `.pdf` (scanned) | OCR | pytesseract + pdf2image |
 | `.docx` | Document parsing | python-docx |
-| `.doc` | Text extraction | textract |
-| `.jpg`, `.png` | OCR | pytesseract + Pillow |
+| `.doc` | Text extraction | textract (fallback to assumed valid) |
 | `.xls`, `.xlsx` | Cell reading | openpyxl |
+
+**Note:** Image files (`.jpg`, `.png`) are no longer supported due to quality issues (broken images, ads, irrelevant content).
 
 ### Vietnamese Keywords Detected
 
