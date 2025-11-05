@@ -39,8 +39,8 @@ CREATE INDEX IF NOT EXISTS idx_form_fields_order ON form_fields(form_id, field_o
 
 -- Full-text search index for Vietnamese text
 -- Using 'simple' config to avoid language-specific stemming issues with Vietnamese
-CREATE INDEX IF NOT EXISTS idx_forms_title_fts ON forms USING gin(to_tsvector('simple', title));
-CREATE INDEX IF NOT EXISTS idx_forms_aliases_fts ON forms USING gin(to_tsvector('simple', array_to_string(aliases, ' ')));
+-- Removed GIN FTS indexes due to IMMUTABLE function requirement
+-- Will use LIKE queries and trigram instead
 
 -- Fuzzy search index using trigram
 CREATE INDEX IF NOT EXISTS idx_forms_title_trgm ON forms USING gin(title gin_trgm_ops);
