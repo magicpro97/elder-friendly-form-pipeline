@@ -21,16 +21,23 @@ help:
 	@echo "  make format      - Format code with black and isort"
 	@echo "  make pre-commit  - Run pre-commit hooks on all files"
 	@echo ""
-	@echo "Maintenance:"
-	@echo "  make backup      - Backup Redis data"
-	@echo "  make ps          - Show running containers"
-	@echo ""
 	@echo "Crawler Commands:"
 	@echo "  make crawler-install  - Install crawler dependencies"
 	@echo "  make crawler-test     - Test crawler locally (single URL)"
 	@echo "  make crawler-run      - Run crawler with full config"
 	@echo "  make crawler-results  - View crawler results"
 	@echo "  make crawler-clean    - Clean crawler output"
+	@echo ""
+	@echo "Form Processing Commands:"
+	@echo "  make forms-process    - Process crawled files → JSON"
+	@echo "  make forms-merge      - Merge manual + crawled forms"
+	@echo "  make forms-search Q=  - Search forms (e.g., Q='đơn xin việc')"
+	@echo "  make forms-list       - List all forms"
+	@echo "  make forms-pipeline   - Run full pipeline (process + merge)"
+	@echo ""
+	@echo "Maintenance:"
+	@echo "  make backup      - Backup Redis data"
+	@echo "  make ps          - Show running containers"
 
 build:
 	docker-compose build
@@ -168,3 +175,50 @@ ocr-validate-all:
 			echo ""; \
 		fi \
 	done
+
+# Form processing commands
+forms-process:
+	@echo "Processing crawled files into structured forms..."
+	python3 src/form_processor.py --input crawler_output --output forms/crawled_forms
+	@echo "✅ Forms processed. Check forms/crawled_forms/"
+
+forms-merge:
+	@echo "Merging manual and crawled forms..."
+	python3 src/form_merger.py
+	@echo "✅ Forms merged. Check forms/all_forms.json"
+
+forms-search:
+	@test -n "$(Q)" || (echo "Usage: make forms-search Q='query'" && exit 1)
+	python3 src/form_search.py "$(Q)"
+
+forms-list:
+	@echo "Listing all forms..."
+	python3 src/form_search.py --list
+
+forms-list-crawled:
+	@echo "Listing crawled forms only..."
+	python3 src/form_search.py --list --source crawler
+
+forms-list-manual:
+	@echo "Listing manual forms only..."
+	python3 src/form_search.py --list --source manual
+
+forms-pipeline:
+	@echo "Running full form processing pipeline..."
+	@echo "Step 1/2: Processing crawled files..."
+	python3 src/form_processor.py --input crawler_output --output forms/crawled_forms
+	@echo ""
+	@echo "Step 2/2: Merging forms..."
+	python3 src/form_merger.py
+	@echo ""
+	@echo "✅ Pipeline complete!"
+	@echo "   - Crawled forms: forms/crawled_forms/"
+	@echo "   - Merged index: forms/all_forms.json"
+	@echo ""
+	@echo "Try: make forms-search Q='đơn xin việc'"
+
+forms-clean:
+	@echo "Cleaning processed forms..."
+	rm -rf forms/crawled_forms/*
+	rm -f forms/all_forms.json
+	@echo "✅ Cleaned"
