@@ -1,158 +1,158 @@
 name: Process Forms and Sync to Database
 
 on:
-    # Trigger after daily crawler completes
-    workflow_run:
-        workflows: ["Daily Crawler"]
-        types:
-            - completed
+  # Trigger after daily crawler completes
+  workflow_run:
+    workflows: ["Daily Crawler"]
+    types:
+      - completed
 
-    # Manual trigger
-    workflow_dispatch:
-        inputs:
-            force_process:
-                description: "Force reprocess all files"
-                required: false
-                type: boolean
-                default: false
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      force_process:
+        description: "Force reprocess all files"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
-    process-and-sync:
-        runs-on: ubuntu-latest
+  process-and-sync:
+    runs-on: ubuntu-latest
 
-        # Permissions for GitHub Actions bot
-        permissions:
-            contents: write # Allow git push
+    # Permissions for GitHub Actions bot
+    permissions:
+      contents: write # Allow git push
 
-        # Only run if crawler succeeded or manual trigger
-        if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    # Only run if crawler succeeded or manual trigger
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Set up Python 3.11
-              uses: actions/setup-python@v5
-              with:
-                  python-version: "3.11"
-                  cache: "pip"
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
 
-            - name: Install dependencies
-              run: |
-                  python -m pip install --upgrade pip
-                  pip install -r requirements.txt
-                  pip install -r requirements-crawler.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-crawler.txt
 
-            - name: Download crawler artifacts
-              if: github.event_name == 'workflow_run'
-              uses: actions/download-artifact@v4
-              with:
-                  pattern: crawler-results-*
-                  path: crawler_output/
-                  run-id: ${{ github.event.workflow_run.id }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  merge-multiple: true
+      - name: Download crawler artifacts
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: crawler-results-*
+          path: crawler_output/
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          merge-multiple: true
 
-            - name: Process forms from crawled files
-              env:
-                  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-              run: |
-                  echo "Processing crawled files..."
-                  python src/form_processor.py \
-                    --input crawler_output \
-                    --output forms/crawled_forms
+      - name: Process forms from crawled files
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          echo "Processing crawled files..."
+          python src/form_processor.py \
+            --input crawler_output \
+            --output forms/crawled_forms
 
-                  echo "✓ Form processing complete"
+          echo "✓ Form processing complete"
 
-            - name: Merge forms
-              run: |
-                  echo "Merging manual and crawled forms..."
-                  python src/form_merger.py --threshold 0.8
+      - name: Merge forms
+        run: |
+          echo "Merging manual and crawled forms..."
+          python src/form_merger.py --threshold 0.8
 
-                  echo "✓ Forms merged successfully"
+          echo "✓ Forms merged successfully"
 
-            - name: Sync to PostgreSQL
-              env:
-                  DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
-              run: |
-                  echo "Syncing forms to PostgreSQL..."
-                  python src/sync_to_db.py \
-                    --forms-file forms/all_forms.json
+      - name: Sync to PostgreSQL
+        env:
+          DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          echo "Syncing forms to PostgreSQL..."
+          python src/sync_to_db.py \
+            --forms-file forms/all_forms.json
 
-                  echo "✓ Database sync complete"
+          echo "✓ Database sync complete"
 
-            - name: Test search function
-              env:
-                  DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
-              run: |
-                  echo "Testing search function..."
-                  python src/sync_to_db.py --test-search "đơn xin việc"
+      - name: Test search function
+        env:
+          DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          echo "Testing search function..."
+          python src/sync_to_db.py --test-search "đơn xin việc"
 
-            - name: Upload processed forms as artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: processed-forms
-                  path: |
-                      forms/all_forms.json
-                      forms/crawled_forms/
-                  retention-days: 30
+      - name: Upload processed forms as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: processed-forms
+          path: |
+            forms/all_forms.json
+            forms/crawled_forms/
+          retention-days: 30
 
-            - name: Commit changes (if any)
-              run: |
-                  git config --global user.name "github-actions[bot]"
-                  git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Commit changes (if any)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-                  # Check if there are changes
-                  if git diff --quiet forms/; then
-                    echo "No changes to commit"
-                  else
-                    git add forms/
-                    git commit -m "chore: auto-update processed forms [skip ci]
+          # Check if there are changes
+          if git diff --quiet forms/; then
+            echo "No changes to commit"
+          else
+            git add forms/
+            git commit -m "chore: auto-update processed forms [skip ci]
 
-                    - Processed forms from crawler
-                    - Merged with manual forms
-                    - Synced to PostgreSQL
+            - Processed forms from crawler
+            - Merged with manual forms
+            - Synced to PostgreSQL
 
-                    Triggered by: ${{ github.event_name }}
-                    Run ID: ${{ github.run_id }}"
+            Triggered by: ${{ github.event_name }}
+            Run ID: ${{ github.run_id }}"
 
-                    git push
-                    echo "✓ Changes committed"
-                  fi
+            git push
+            echo "✓ Changes committed"
+          fi
 
-            - name: Create summary
-              run: |
-                  echo "## Form Processing Summary" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
+      - name: Create summary
+        run: |
+          echo "## Form Processing Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-                  # Count forms
-                  TOTAL_FORMS=$(jq '.count' forms/all_forms.json)
-                  MANUAL_FORMS=$(jq '.sources.manual // 0' forms/all_forms.json)
-                  CRAWLER_FORMS=$(jq '.sources.crawler // 0' forms/all_forms.json)
+          # Count forms
+          TOTAL_FORMS=$(jq '.count' forms/all_forms.json)
+          MANUAL_FORMS=$(jq '.sources.manual // 0' forms/all_forms.json)
+          CRAWLER_FORMS=$(jq '.sources.crawler // 0' forms/all_forms.json)
 
-                  echo "### 📊 Statistics" >> $GITHUB_STEP_SUMMARY
-                  echo "- **Total forms**: $TOTAL_FORMS" >> $GITHUB_STEP_SUMMARY
-                  echo "- **Manual forms**: $MANUAL_FORMS" >> $GITHUB_STEP_SUMMARY
-                  echo "- **Crawled forms**: $CRAWLER_FORMS" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Statistics" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total forms**: $TOTAL_FORMS" >> $GITHUB_STEP_SUMMARY
+          echo "- **Manual forms**: $MANUAL_FORMS" >> $GITHUB_STEP_SUMMARY
+          echo "- **Crawled forms**: $CRAWLER_FORMS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-                  echo "### ✅ Tasks Completed" >> $GITHUB_STEP_SUMMARY
-                  echo "- [x] Downloaded crawler artifacts" >> $GITHUB_STEP_SUMMARY
-                  echo "- [x] Processed crawled files (OCR + AI)" >> $GITHUB_STEP_SUMMARY
-                  echo "- [x] Merged with manual forms" >> $GITHUB_STEP_SUMMARY
-                  echo "- [x] Synced to PostgreSQL" >> $GITHUB_STEP_SUMMARY
-                  echo "- [x] Committed changes to repository" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Tasks Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] Downloaded crawler artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] Processed crawled files (OCR + AI)" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] Merged with manual forms" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] Synced to PostgreSQL" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] Committed changes to repository" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-                  echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
-                  echo "- [View processed forms](https://github.com/${{ github.repository }}/blob/main/forms/all_forms.json)" >> $GITHUB_STEP_SUMMARY
-                  echo "- [View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [View processed forms](https://github.com/${{ github.repository }}/blob/main/forms/all_forms.json)" >> $GITHUB_STEP_SUMMARY
+          echo "- [View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
 
-            - name: Notify on failure
-              if: failure()
-              run: |
-                  echo "::error::Form processing failed. Check logs for details."
-                  echo "## ❌ Form Processing Failed" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "The form processing workflow encountered an error." >> $GITHUB_STEP_SUMMARY
-                  echo "Please check the [logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details." >> $GITHUB_STEP_SUMMARY
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Form processing failed. Check logs for details."
+          echo "## ❌ Form Processing Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The form processing workflow encountered an error." >> $GITHUB_STEP_SUMMARY
+          echo "Please check the [logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details." >> $GITHUB_STEP_SUMMARY

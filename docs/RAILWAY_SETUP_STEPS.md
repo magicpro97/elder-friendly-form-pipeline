@@ -11,21 +11,25 @@
 ## Step 1: Create PostgreSQL Database on Railway
 
 ### 1.1 Login to Railway
+
 ```
 https://railway.app/
 ```
 
 ### 1.2 Navigate to Your Project
+
 - Click on your existing project: **elder-friendly-form-pipeline**
 - (If you don't have a project yet, create one and connect to GitHub)
 
 ### 1.3 Add PostgreSQL Database
+
 1. Click **"New"** button (top right)
 2. Select **"Database"**
 3. Choose **"PostgreSQL"**
 4. Wait ~30 seconds for provisioning
 
 ### 1.4 Verify Database is Running
+
 - You should see a new PostgreSQL service card
 - Status should show green checkmark ✅
 - Click on the PostgreSQL card to view details
@@ -35,16 +39,19 @@ https://railway.app/
 ## Step 2: Get DATABASE_URL
 
 ### 2.1 Navigate to Variables Tab
+
 1. Click on **PostgreSQL** service card
 2. Click **"Variables"** tab
 3. Find **DATABASE_URL** variable
 
 ### 2.2 Copy DATABASE_URL
+
 ```
 postgresql://postgres:PASSWORD@HOST:PORT/railway
 ```
 
 **Example:**
+
 ```
 postgresql://postgres:abc123xyz@containers-us-west-123.railway.app:5432/railway
 ```
@@ -52,7 +59,9 @@ postgresql://postgres:abc123xyz@containers-us-west-123.railway.app:5432/railway
 ⚠️ **Important**: Keep this URL secret! Don't commit to Git.
 
 ### 2.3 Note the Connection Details
+
 You'll also see individual variables:
+
 - `PGHOST` - Database host
 - `PGPORT` - Port (usually 5432)
 - `PGUSER` - Username (usually postgres)
@@ -64,22 +73,27 @@ You'll also see individual variables:
 ## Step 3: Add DATABASE_URL to GitHub Secrets
 
 ### 3.1 Navigate to GitHub Repository Settings
+
 ```
 https://github.com/magicpro97/elder-friendly-form-pipeline/settings/secrets/actions
 ```
 
 ### 3.2 Create New Repository Secret
+
 1. Click **"New repository secret"**
 2. Name: `RAILWAY_DATABASE_URL`
 3. Value: Paste the DATABASE_URL from Railway (Step 2.2)
 4. Click **"Add secret"**
 
 ### 3.3 Verify Secret is Added
+
 - You should see `RAILWAY_DATABASE_URL` in the list
 - Value will be masked as `***`
 
 ### 3.4 (Optional) Add Other Secrets if Missing
+
 Check if you have:
+
 - ✅ `OPENAI_API_KEY` (for AI field extraction)
 - ✅ `RAILWAY_DATABASE_URL` (just added)
 
@@ -105,13 +119,14 @@ You have **3 options** to initialize the schema:
    - Wait for success message
 
 4. **Verify Tables Created**
+
    ```sql
    -- Run this query to verify
-   SELECT table_name 
-   FROM information_schema.tables 
+   SELECT table_name
+   FROM information_schema.tables
    WHERE table_schema = 'public';
    ```
-   
+
    Should return:
    - `forms`
    - `form_fields`
@@ -119,16 +134,19 @@ You have **3 options** to initialize the schema:
 ### Option B: Via Local Sync Script
 
 1. **Set Environment Variable Locally**
+
    ```bash
    export DATABASE_URL="postgresql://postgres:PASSWORD@HOST:PORT/railway"
    ```
 
 2. **Run Init Command**
+
    ```bash
    python src/sync_to_db.py --init-schema
    ```
 
 3. **Expected Output**
+
    ```
    INFO: Connecting to PostgreSQL database...
    INFO: ✓ Connected successfully
@@ -139,21 +157,25 @@ You have **3 options** to initialize the schema:
 ### Option C: Via Railway CLI (Advanced)
 
 1. **Install Railway CLI**
+
    ```bash
    npm install -g @railway/cli
    ```
 
 2. **Login**
+
    ```bash
    railway login
    ```
 
 3. **Link to Project**
+
    ```bash
    railway link
    ```
 
 4. **Run Migration**
+
    ```bash
    railway run psql $DATABASE_URL < db/schema.sql
    ```
@@ -200,14 +222,16 @@ Database statistics:
 
 1. **Open Query Console**
 2. **Run Query**
+
    ```sql
-   SELECT form_id, title, source, 
+   SELECT form_id, title, source,
           array_length(aliases, 1) as alias_count
    FROM forms
    ORDER BY source, title;
    ```
 
 3. **Expected Result**
+
    ```
    form_id              | title                      | source  | alias_count
    ---------------------|----------------------------|---------|------------
@@ -276,11 +300,13 @@ SELECT * FROM search_forms('đơn', 0.3, 10);
 ### 7.2 Verify App is Using PostgreSQL
 
 1. **Check Logs**
+
    ```
    Railway → App service → "Deployments" → Latest deployment → View logs
    ```
 
 2. **Look for**
+
    ```
    INFO: Loaded 6 forms from PostgreSQL
    INFO: Connected to PostgreSQL database
@@ -297,16 +323,19 @@ Railway → App service → Copy the URL (e.g., `https://elder-friendly-form-pip
 ### 8.2 Test Endpoints
 
 **List all forms:**
+
 ```bash
 curl https://your-app.railway.app/api/forms
 ```
 
 **Search forms:**
+
 ```bash
 curl "https://your-app.railway.app/api/forms/search?q=đơn"
 ```
 
 **Get specific form:**
+
 ```bash
 curl https://your-app.railway.app/api/forms/don_xin_viec
 ```
@@ -336,6 +365,7 @@ curl https://your-app.railway.app/api/forms/don_xin_viec
 ### 9.1 Trigger Manual Workflow
 
 1. **Navigate to Actions Tab**
+
    ```
    https://github.com/magicpro97/elder-friendly-form-pipeline/actions
    ```
@@ -373,6 +403,7 @@ curl https://your-app.railway.app/api/forms/don_xin_viec
 ### 9.3 Verify Database Updated
 
 **Check Railway Query Console:**
+
 ```sql
 SELECT COUNT(*) as total_forms FROM forms;
 SELECT COUNT(*) as total_fields FROM form_fields;
@@ -389,6 +420,7 @@ The workflow will automatically trigger after "Daily Vietnamese Form Crawler" co
 ### 10.2 Or Manually Trigger Crawler
 
 1. **Run Crawler Workflow**
+
    ```
    GitHub Actions → "Daily Vietnamese Form Crawler" → Run workflow
    ```
@@ -406,11 +438,13 @@ The workflow will automatically trigger after "Daily Vietnamese Form Crawler" co
 ### Issue 1: Connection Timeout
 
 **Error:**
+
 ```
 psycopg2.OperationalError: could not connect to server
 ```
 
 **Solution:**
+
 1. Check DATABASE_URL is correct
 2. Verify PostgreSQL service is running on Railway
 3. Check network/firewall (unlikely with Railway)
@@ -418,22 +452,26 @@ psycopg2.OperationalError: could not connect to server
 ### Issue 2: Schema Already Exists
 
 **Error:**
+
 ```
 relation "forms" already exists
 ```
 
 **Solution:**
+
 - Schema already initialized, skip Step 4
 - Or drop and recreate: `DROP TABLE IF EXISTS forms, form_fields CASCADE;`
 
 ### Issue 3: GitHub Secret Not Working
 
 **Error in Actions:**
+
 ```
 DATABASE_URL not found in environment variables
 ```
 
 **Solution:**
+
 1. Verify secret name is exactly `RAILWAY_DATABASE_URL`
 2. Re-add the secret with correct value
 3. Re-run workflow
@@ -441,11 +479,13 @@ DATABASE_URL not found in environment variables
 ### Issue 4: API Returns Empty Forms
 
 **Error:**
+
 ```json
 {"ok": true, "count": 0, "forms": []}
 ```
 
 **Solution:**
+
 1. Check if forms are in database: `SELECT COUNT(*) FROM forms;`
 2. If 0, run sync script: `python src/sync_to_db.py`
 3. Check app logs for errors
@@ -472,17 +512,20 @@ DATABASE_URL not found in environment variables
 ✅ **All green if:**
 
 1. **Database has data**
+
    ```sql
    SELECT COUNT(*) FROM forms;  -- Returns 6+
    ```
 
 2. **API works**
+
    ```bash
    curl https://your-app.railway.app/api/forms | jq '.count'
    # Returns: 6
    ```
 
 3. **Search works**
+
    ```bash
    curl "https://your-app.railway.app/api/forms/search?q=đơn" | jq '.results | length'
    # Returns: 2+
@@ -517,9 +560,9 @@ DATABASE_URL not found in environment variables
 
 ## Support
 
-- **Railway Docs**: https://docs.railway.app/databases/postgresql
-- **Project Issues**: https://github.com/magicpro97/elder-friendly-form-pipeline/issues
-- **PostgreSQL Docs**: https://www.postgresql.org/docs/current/
+- **Railway Docs**: <https://docs.railway.app/databases/postgresql>
+- **Project Issues**: <https://github.com/magicpro97/elder-friendly-form-pipeline/issues>
+- **PostgreSQL Docs**: <https://www.postgresql.org/docs/current/>
 
 ---
 
