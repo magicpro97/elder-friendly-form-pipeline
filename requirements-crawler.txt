@@ -9,13 +9,13 @@ python-dateutil>=2.8.2
 cloudscraper>=1.2.71
 
 # OCR and document processing
-pytesseract>=0.3.10        # OCR for images
-Pillow>=10.0.0             # Image processing
-PyPDF2>=3.0.0              # PDF text extraction
-pdf2image>=1.16.3          # Convert PDF to images for OCR
-python-docx>=1.1.0         # DOCX text extraction
-openpyxl>=3.1.2            # Excel file reading
-textract>=1.6.5            # Multi-format text extraction (optional)
+pytesseract>=0.3.10  # OCR for images
+Pillow>=10.0.0  # Image processing
+PyPDF2>=3.0.0  # PDF text extraction
+pdf2image>=1.16.3  # Convert PDF to images for OCR
+python-docx>=1.1.0  # DOCX text extraction
+openpyxl>=3.1.2  # Excel file reading
+# textract>=1.6.5  # Multi-format text extraction - DISABLED: installation issues on Python 3.11+
 
 # Optional: for advanced crawling
 selenium>=4.15.0  # If you need JavaScript rendering
