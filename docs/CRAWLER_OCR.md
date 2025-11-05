@@ -5,17 +5,20 @@
 ### 1. Install System Dependencies
 
 **macOS:**
+
 ```bash
 brew install tesseract tesseract-lang poppler
 ```
 
 **Ubuntu/Debian:**
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y tesseract-ocr tesseract-ocr-vie poppler-utils
 ```
 
 **Verify installation:**
+
 ```bash
 tesseract --version
 tesseract --list-langs | grep vie  # Should show 'vie'
@@ -84,25 +87,31 @@ Save to CSV with validation results
 ### Vietnamese Keywords Detected
 
 **Form Keywords:**
+
 - mẫu, đơn, biểu mẫu, tờ khai, phiếu
 - giấy, bản khai, hồ sơ, văn bản
 
 **Date/Number Fields:**
+
 - số, ngày, tháng, năm
 
 **Personal Info:**
+
 - họ tên, địa chỉ, cmnd, cccd
 
 **Official Fields:**
+
 - chức vụ, chữ ký, xác nhận
 
 ### Validation Criteria
 
 ✅ **VALID** if:
+
 - Text length ≥ 50 characters
 - At least 2 form keywords found
 
 ❌ **INVALID** if:
+
 - Insufficient text extracted
 - No form keywords found
 - Extraction error
@@ -125,19 +134,22 @@ Method_Bonus = {
 
 ## CSV Output
 
-### Without OCR (old format):
+### Without OCR (old format)
+
 ```csv
 Tieu_de_trang,Link_file,Ten_file,Dang_tep,Ngay_dang
 "Mẫu đơn","http://...",mau-don.pdf,.pdf,2025-11-05
 ```
 
-### With OCR (new format):
+### With OCR (new format)
+
 ```csv
 Tieu_de_trang,Link_file,Ten_file,Dang_tep,Ngay_dang,OCR_Valid,OCR_Confidence,OCR_Keywords,OCR_Method
 "Mẫu đơn","http://...",mau-don.pdf,.pdf,2025-11-05,Yes,0.85,"mẫu, đơn, họ tên",pdf
 ```
 
 **Columns:**
+
 - `OCR_Valid`: Yes/No
 - `OCR_Confidence`: 0.00 - 1.00
 - `OCR_Keywords`: Top 3 keywords found
@@ -189,11 +201,13 @@ Tieu_de_trang,Link_file,Ten_file,Dang_tep,Ngay_dang,OCR_Valid,OCR_Confidence,OCR
 ### Optimization
 
 **Skip OCR for large batches:**
+
 ```python
 crawler = VietnameseFormCrawler(enable_ocr=False)
 ```
 
 **Process only high-priority file types:**
+
 ```python
 # In settings.py
 FILE_EXTENSIONS = [".pdf", ".docx"]  # Skip images
@@ -239,11 +253,13 @@ pdftoppm -v
 ### Low Confidence Scores
 
 **Causes:**
+
 - Poor image quality
 - Non-Vietnamese text
 - Corrupted file
 
 **Solutions:**
+
 1. Check original file quality
 2. Verify Vietnamese language pack: `tesseract --list-langs`
 3. Test extraction manually: `python src/ocr_validator.py <file>`
@@ -303,21 +319,25 @@ Update `.github/workflows/daily-crawler.yml`:
 ## CSV Analytics
 
 **Count valid files:**
+
 ```bash
 awk -F',' '$6=="Yes"' crawler_output/downloaded_files.csv | wc -l
 ```
 
 **Average confidence:**
+
 ```bash
 awk -F',' 'NR>1 {sum+=$7; count++} END {print sum/count}' crawler_output/downloaded_files.csv
 ```
 
 **Most common extraction method:**
+
 ```bash
 awk -F',' 'NR>1 {print $9}' crawler_output/downloaded_files.csv | sort | uniq -c | sort -rn
 ```
 
 **List invalid files:**
+
 ```bash
 awk -F',' '$6=="No" {print $3}' crawler_output/downloaded_files.csv
 ```

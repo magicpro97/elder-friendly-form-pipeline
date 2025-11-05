@@ -139,7 +139,10 @@ class OCRValidator:
             }
 
         # Analyze extracted text
-        return self._analyze_text(text, method)
+        result = self._analyze_text(text, method)
+        # Add extracted text to result for downstream processing
+        result["text"] = text
+        return result
 
     def _extract_text(self, file_path: Path, suffix: str, mime_type: str | None) -> tuple[str, str]:
         """
