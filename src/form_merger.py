@@ -12,6 +12,7 @@ Features:
 
 import json
 import logging
+from datetime import datetime
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
@@ -233,7 +234,7 @@ class FormMerger:
                 "manual": len([f for f in forms if f.get("source") == "manual"]),
                 "crawler": len([f for f in forms if f.get("source") == "crawler"]),
             },
-            "generated_at": str(Path.ctime(self.output_path)) if self.output_path.exists() else None,
+            "generated_at": datetime.now().isoformat() if self.output_path.exists() else None,
         }
 
         # Ensure output directory exists
