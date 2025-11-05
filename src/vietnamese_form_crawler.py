@@ -21,13 +21,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
-import requests
-from bs4 import BeautifulSoup
-
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.settings import (
+import requests  # noqa: E402
+from bs4 import BeautifulSoup  # noqa: E402
+
+from src.settings import (  # noqa: E402
     ALL_KEYWORDS,
     CRAWLER_TARGETS,
     CRITICAL_KEYWORDS,
@@ -43,7 +43,7 @@ from src.settings import (
 
 # Import OCR validator
 try:
-    from src.ocr_validator import OCRValidator
+    from src.ocr_validator import OCRValidator  # noqa: E402
 
     HAS_OCR = True
 except ImportError:
@@ -79,8 +79,8 @@ class VietnameseFormCrawler:
         r"(\d{4}-\d{1,2}-\d{1,2})",
     ]
 
-    # Supported file extensions
-    FILE_EXTENSIONS = [".pdf", ".doc", ".docx", ".jpg", ".png", ".xls", ".xlsx"]
+    # Supported file extensions (documents only, no images)
+    FILE_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx"]
 
     def __init__(self, enable_ocr: bool = True):
         """
