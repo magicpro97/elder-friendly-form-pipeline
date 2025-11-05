@@ -137,3 +137,34 @@ crawler-results:
 crawler-clean:
 	rm -rf crawler_output/*
 	mkdir -p crawler_output
+
+# OCR commands
+ocr-deps-mac:
+	@echo "Installing OCR dependencies for macOS..."
+	brew install tesseract tesseract-lang poppler
+	@echo "✅ Tesseract, Vietnamese language pack, and poppler installed"
+
+ocr-deps-ubuntu:
+	@echo "Installing OCR dependencies for Ubuntu..."
+	sudo apt-get update
+	sudo apt-get install -y tesseract-ocr tesseract-ocr-vie poppler-utils
+	@echo "✅ OCR dependencies installed"
+
+ocr-test:
+	@echo "Testing OCR on downloaded files..."
+	python3 test_ocr_validator.py
+
+ocr-test-file:
+	@echo "Usage: make ocr-test-file FILE=<path>"
+	@test -n "$(FILE)" || (echo "Error: FILE parameter required" && exit 1)
+	python3 src/ocr_validator.py $(FILE)
+
+ocr-validate-all:
+	@echo "Validating all downloaded files..."
+	@for f in crawler_output/*.{pdf,doc,docx,jpg,png}; do \
+		if [ -f "$$f" ]; then \
+			echo "Validating $$f..."; \
+			python3 src/ocr_validator.py "$$f" 2>&1 | grep -E "(VALID|confidence|keywords_found)"; \
+			echo ""; \
+		fi \
+	done

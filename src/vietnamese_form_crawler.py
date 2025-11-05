@@ -18,7 +18,7 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import requests
@@ -40,6 +40,15 @@ from src.settings import (
     SAVE_CSV,
     USER_AGENT,
 )
+
+# Import OCR validator
+try:
+    from src.ocr_validator import OCRValidator
+
+    HAS_OCR = True
+except ImportError:
+    HAS_OCR = False
+    logging.warning("OCR validator not available, file validation disabled")
 
 # Try to import cloudscraper for anti-bot protection
 try:
@@ -73,8 +82,13 @@ class VietnameseFormCrawler:
     # Supported file extensions
     FILE_EXTENSIONS = [".pdf", ".doc", ".docx", ".jpg", ".png", ".xls", ".xlsx"]
 
-    def __init__(self):
-        """Initialize crawler with session and results tracking"""
+    def __init__(self, enable_ocr: bool = True):
+        """
+        Initialize crawler with session and results tracking
+
+        Args:
+            enable_ocr: Enable OCR validation of downloaded files
+        """
         if USE_CLOUDSCRAPER:
             self.session = cloudscraper.create_scraper()
             logger.info("Using cloudscraper for anti-bot protection")
@@ -83,8 +97,20 @@ class VietnameseFormCrawler:
             logger.warning("Cloudscraper not available, using standard requests")
 
         self.session.headers.update({"User-Agent": USER_AGENT})
-        self.results: List[Dict[str, Any]] = []
+        self.results: list[dict[str, Any]] = []
         self.total_downloaded = 0
+        self.total_validated = 0
+        self.total_failed_validation = 0
+
+        # Initialize OCR validator
+        self.enable_ocr = enable_ocr and HAS_OCR
+        if self.enable_ocr:
+            self.ocr_validator = OCRValidator(verbose=False)
+            logger.info("OCR validation enabled")
+        else:
+            self.ocr_validator = None
+            if enable_ocr and not HAS_OCR:
+                logger.warning("OCR requested but dependencies not available")
 
         # Initialize CSV file
         if SAVE_CSV:
@@ -95,11 +121,20 @@ class VietnameseFormCrawler:
         if not CSV_FILE.exists():
             with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
-                writer.writerow(["Tieu_de_trang", "Link_file", "Ten_file", "Dang_tep", "Ngay_dang"])
+                headers = ["Tieu_de_trang", "Link_file", "Ten_file", "Dang_tep", "Ngay_dang"]
+                if self.enable_ocr:
+                    headers.extend(["OCR_Valid", "OCR_Confidence", "OCR_Keywords", "OCR_Method"])
+                writer.writerow(headers)
             logger.info(f"Initialized CSV file: {CSV_FILE}")
 
     def _save_csv_row(
-        self, page_title: str, file_url: str, file_name: str, file_extension: str, page_date: Optional[datetime]
+        self,
+        page_title: str,
+        file_url: str,
+        file_name: str,
+        file_extension: str,
+        page_date: datetime | None,
+        validation_result: dict[str, Any] | None = None,
     ):
         """Save downloaded file info to CSV"""
         if not SAVE_CSV:
@@ -107,11 +142,26 @@ class VietnameseFormCrawler:
 
         date_str = page_date.strftime("%Y-%m-%d") if page_date else ""
 
+        row = [page_title, file_url, file_name, file_extension, date_str]
+
+        # Add validation results if OCR is enabled
+        if self.enable_ocr and validation_result:
+            row.extend(
+                [
+                    "Yes" if validation_result.get("is_valid") else "No",
+                    f"{validation_result.get('confidence', 0):.2f}",
+                    ", ".join(validation_result.get("keywords_found", [])[:3]),  # Top 3 keywords
+                    validation_result.get("method", "unknown"),
+                ]
+            )
+        elif self.enable_ocr:
+            row.extend(["No", "0.00", "", "not_validated"])
+
         with open(CSV_FILE, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow([page_title, file_url, file_name, file_extension, date_str])
+            writer.writerow(row)
 
-    def _parse_date_str(self, date_str: str) -> Optional[datetime]:
+    def _parse_date_str(self, date_str: str) -> datetime | None:
         """Parse Vietnamese date string to datetime object"""
         date_str = date_str.strip()
 
@@ -137,7 +187,7 @@ class VietnameseFormCrawler:
             logger.debug(f"Failed to parse date '{date_str}': {e}")
             return None
 
-    def extract_date(self, html_text: str) -> Optional[datetime]:
+    def extract_date(self, html_text: str) -> datetime | None:
         """Extract the most recent date from HTML text"""
         if not html_text:
             return None
@@ -163,8 +213,8 @@ class VietnameseFormCrawler:
 
         return None
 
-    def download_file(self, url: str, page_title: str, page_date: Optional[datetime]) -> Tuple[bool, Optional[str]]:
-        """Download file from URL and save to disk"""
+    def download_file(self, url: str, page_title: str, page_date: datetime | None) -> tuple[bool, str | None]:
+        """Download file from URL, validate with OCR, and save to disk"""
         # Extract filename from URL
         url_base = url.split("?")[0]
         filename = url_base.split("/")[-1]
@@ -191,8 +241,30 @@ class VietnameseFormCrawler:
 
             logger.info(f"✓ Downloaded successfully: {filename}")
 
-            # Save to CSV
-            self._save_csv_row(page_title, url, filename, file_ext, page_date)
+            # Validate file with OCR if enabled
+            validation_result = None
+            if self.enable_ocr and self.ocr_validator:
+                logger.debug(f"Validating {filename} with OCR...")
+                validation_result = self.ocr_validator.validate_file(file_path)
+
+                if validation_result.get("is_valid"):
+                    self.total_validated += 1
+                    logger.info(
+                        f"✓ Validation passed: {filename} "
+                        f"(confidence: {validation_result.get('confidence', 0):.2f}, "
+                        f"method: {validation_result.get('method')})"
+                    )
+                else:
+                    self.total_failed_validation += 1
+                    logger.warning(
+                        f"✗ Validation failed: {filename} - {validation_result.get('error', 'unknown error')}"
+                    )
+                    # Optionally delete invalid files
+                    # file_path.unlink()
+                    # return False, None
+
+            # Save to CSV with validation results
+            self._save_csv_row(page_title, url, filename, file_ext, page_date, validation_result)
 
             return True, filename
 
@@ -200,7 +272,7 @@ class VietnameseFormCrawler:
             logger.error(f"Failed to download {url}: {e}")
             return False, None
 
-    def extract_form_links(self, url: str) -> Tuple[List[str], Optional[datetime], str]:
+    def extract_form_links(self, url: str) -> tuple[list[str], datetime | None, str]:
         """
         Extract form-related links from a page
 
@@ -266,7 +338,7 @@ class VietnameseFormCrawler:
 
         return list(set(links)), page_date, page_title
 
-    def crawl_all(self) -> List[Dict[str, Any]]:
+    def crawl_all(self) -> list[dict[str, Any]]:
         """Crawl all configured targets"""
         logger.info("=" * 50)
         logger.info("Vietnamese Form Crawler - Starting")
@@ -330,6 +402,13 @@ class VietnameseFormCrawler:
         print("=" * 50)
         print(f"Total targets: {len(CRAWLER_TARGETS)}")
         print(f"Files downloaded: {self.total_downloaded}")
+
+        if self.enable_ocr:
+            print(f"Files validated (OCR): {self.total_validated}")
+            print(f"Files failed validation: {self.total_failed_validation}")
+            validation_rate = (self.total_validated / self.total_downloaded * 100) if self.total_downloaded > 0 else 0
+            print(f"Validation rate: {validation_rate:.1f}%")
+
         print(f"Output directory: {OUTPUT_DIR}")
         if SAVE_CSV:
             print(f"CSV file: {CSV_FILE}")

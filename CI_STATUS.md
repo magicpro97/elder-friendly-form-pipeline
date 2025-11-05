@@ -32,6 +32,7 @@ Test suite failing due to missing crawler dependencies in CI environment.
 ## Alternative Solutions
 
 ### Option 1: Skip crawler tests in CI
+
 ```python
 # tests/test_crawler.py
 import pytest
@@ -45,6 +46,7 @@ class TestCrawler:
 ```
 
 ### Option 2: Make crawler tests optional
+
 ```yaml
 # .github/workflows/ci-cd.yml
 - name: Run tests
@@ -53,6 +55,7 @@ class TestCrawler:
 ```
 
 ### Option 3: Separate test job for crawler
+
 ```yaml
 jobs:
   test-app:
