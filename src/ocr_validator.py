@@ -210,7 +210,7 @@ class OCRValidator:
             text = ""
 
             for i, image in enumerate(images):
-                logger.debug(f"OCR page {i+1} of PDF")
+                logger.debug(f"OCR page {i + 1} of PDF")
                 page_text = pytesseract.image_to_string(image, lang="vie")
                 text += page_text + "\n"
 
@@ -239,6 +239,7 @@ class OCRValidator:
 
     def _extract_from_doc(self, file_path: Path) -> tuple[str, str]:
         """Extract text from DOC (old Word format)"""
+        # Try textract first
         if HAS_TEXTRACT:
             try:
                 text = textract.process(str(file_path)).decode("utf-8")
@@ -246,9 +247,38 @@ class OCRValidator:
             except Exception as e:
                 logger.error(f"textract failed for {file_path.name}: {e}")
 
-        # Fallback: .doc files are hard to parse, mark as valid if file exists
-        logger.warning(f"Cannot extract text from .doc file {file_path.name}, assuming valid")
-        return "doc file (assumed valid)", "doc_assumed"
+        # Try converting to text using antiword (if available)
+        try:
+            import subprocess
+
+            result = subprocess.run(["antiword", str(file_path)], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout, "doc_antiword"
+        except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as e:
+            logger.debug(f"antiword not available or failed for {file_path.name}: {e}")
+
+        # Last resort: Try to convert .doc to .docx using LibreOffice (if available in CI)
+        try:
+            import subprocess
+            import tempfile
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                subprocess.run(
+                    ["libreoffice", "--headless", "--convert-to", "docx", "--outdir", tmpdir, str(file_path)],
+                    capture_output=True,
+                    timeout=30,
+                    check=False,
+                )
+                docx_path = Path(tmpdir) / f"{file_path.stem}.docx"
+                if docx_path.exists():
+                    return self._extract_from_docx(docx_path)
+        except Exception as e:
+            logger.debug(f"LibreOffice conversion failed for {file_path.name}: {e}")
+
+        # Fallback: .doc files are hard to parse without proper tools
+        # Return empty text which will fail OCR validation (forces file to be skipped)
+        logger.warning(f"Cannot extract text from .doc file {file_path.name}, skipping...")
+        return "", "doc_extraction_failed"
 
     def _extract_from_image(self, file_path: Path) -> tuple[str, str]:
         """Extract text from image using OCR"""

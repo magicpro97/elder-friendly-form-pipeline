@@ -30,7 +30,9 @@ jobs:
           sudo apt-get install -y \
             tesseract-ocr \
             tesseract-ocr-vie \
-            poppler-utils
+            poppler-utils \
+            antiword \
+            libreoffice
 
       - name: Verify OCR installation
         run: |
