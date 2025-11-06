@@ -184,6 +184,33 @@ class FormProcessor:
         # Limit to top 3 most relevant
         return aliases[:3]
 
+    def _save_original_file(self, source_file: Path, form_id: str) -> str:
+        """
+        Save original file for PDF filling later
+
+        Args:
+            source_file: Path to the downloaded file
+            form_id: Generated form_id
+
+        Returns:
+            Relative path to saved original file
+        """
+        import shutil
+
+        # Create directory for this form's original file
+        storage_dir = Path("forms/original_files") / form_id
+        storage_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy file with original extension
+        dest_file = storage_dir / f"original{source_file.suffix}"
+        shutil.copy2(source_file, dest_file)
+
+        # Return relative path for portability
+        relative_path = str(dest_file.relative_to(Path.cwd()))
+        logger.info(f"Saved original file: {relative_path}")
+
+        return relative_path
+
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
     def _improve_title_with_ai(self, title: str, text: str) -> str:
         """
@@ -450,7 +477,10 @@ CHỈ trả về JSON, không giải thích thêm."""
         # Step 5: Generate aliases
         aliases = self._extract_aliases(title, text)
 
-        # Step 6: Create form definition
+        # Step 6: Save original file for PDF filling
+        original_file_path = self._save_original_file(file_path, form_id)
+
+        # Step 7: Create form definition
         form_def = {
             "form_id": form_id,
             "title": title,
@@ -459,6 +489,8 @@ CHỈ trả về JSON, không giải thích thêm."""
             "metadata": {
                 "source_file": file_path.name,
                 "source_url": source_url,
+                "original_file_path": original_file_path,  # Path to original file for PDF filling
+                "file_extension": file_path.suffix,  # .doc, .docx, .pdf
                 "processed_at": datetime.now().isoformat(),
                 "ocr_confidence": ocr_result.get("confidence", 0.0),
                 "ocr_method": ocr_result.get("method", "unknown"),

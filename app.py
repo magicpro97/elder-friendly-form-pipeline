@@ -6,6 +6,7 @@ import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -1029,7 +1030,7 @@ def preview(request: Request, session_id: str):
 @app.get("/export_pdf")
 @limiter.limit("10/minute")
 def export_pdf(request: Request, session_id: str):
-    """Export form as PDF"""
+    """Export form as PDF using original file template"""
     try:
         st = get_session_manager().get(session_id)
         if not st:
@@ -1037,14 +1038,46 @@ def export_pdf(request: Request, session_id: str):
 
         fid = st["form_id"]
         form = FORM_INDEX[fid]
+        answers = st.get("answers", {})
+
+        # Check if form has original file (crawler forms)
+        original_file_path = form.get("metadata", {}).get("original_file_path")
+
+        if original_file_path and Path(original_file_path).exists():
+            # Use original file template with form_filler
+            logger.info(f"Session {session_id}: Using original file template: {original_file_path}")
+
+            try:
+                from src.form_filler import fill_and_export
+
+                # Fill and convert to PDF
+                filled_pdf_path = fill_and_export(original_file_path, answers)
+
+                # Read PDF content
+                with open(filled_pdf_path, "rb") as f:
+                    pdf_content = f.read()
+
+                logger.info(f"Session {session_id}: PDF generated from original template")
+
+                return StreamingResponse(
+                    BytesIO(pdf_content),
+                    media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename={form['title']}.pdf"},
+                )
+
+            except Exception as e:
+                logger.warning(f"Failed to use original template: {e}, falling back to generic template")
+                # Fall through to generic template below
+
+        # Fallback: Use generic HTML template (for manual forms or if original file fails)
+        logger.info(f"Session {session_id}: Using generic HTML template")
 
         if not st.get("preview"):
-            st["preview"] = [{"label": f["label"], "value": st["answers"].get(f["name"], "")} for f in form["fields"]]
+            st["preview"] = [{"label": f["label"], "value": answers.get(f["name"], "")} for f in form["fields"]]
 
         tpl = env.get_template(settings.pdf_template)
         html = tpl.render(title=form["title"], preview=st["preview"], style=form.get("style", {}))
 
-        logger.info(f"Session {session_id}: Generating PDF for form {fid}")
         from weasyprint import HTML
 
         pdf = HTML(string=html).write_pdf()
@@ -1098,7 +1131,7 @@ def list_forms_api(request: Request, source: str | None = None):
 
     except Exception as e:
         logger.error(f"Failed to list forms: {e}", exc_info=True)
-        raise HTTPException(500, "Không thể tải danh sách forms")
+        raise HTTPException(500, "Không thể tải danh sách forms") from e
 
 
 @app.get("/api/forms/search")
@@ -1137,7 +1170,7 @@ def search_forms_api(
 
     except Exception as e:
         logger.error(f"Search failed for query '{q}': {e}", exc_info=True)
-        raise HTTPException(500, "Tìm kiếm thất bại")
+        raise HTTPException(500, "Tìm kiếm thất bại") from e
 
 
 @app.get("/api/forms/{form_id}")
@@ -1171,7 +1204,7 @@ def get_form_api(request: Request, form_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get form {form_id}: {e}", exc_info=True)
-        raise HTTPException(500, "Không thể tải thông tin form")
+        raise HTTPException(500, "Không thể tải thông tin form") from e
 
 
 # =============================================================================
