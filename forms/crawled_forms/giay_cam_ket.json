@@ -1,0 +1,130 @@
+{
+  "form_id": "giay_cam_ket",
+  "title": "GIẤY CAM KẾT",
+  "aliases": [
+    "giấy cam kết",
+    "cam kết"
+  ],
+  "source": "crawler",
+  "metadata": {
+    "source_file": "mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
+    "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2020/05/mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
+    "processed_at": "2025-11-06T15:17:58.623289",
+    "ocr_confidence": 0.8,
+    "ocr_method": "doc_antiword",
+    "ocr_keywords": [
+      "đơn",
+      "giấy",
+      "số",
+      "ngày",
+      "tháng"
+    ]
+  },
+  "fields": [
+    {
+      "name": "full_name",
+      "label": "Tôi tên:",
+      "type": "string",
+      "required": true,
+      "example": "Nguyễn Văn A"
+    },
+    {
+      "name": "id_number",
+      "label": "CMND số:",
+      "type": "string",
+      "required": true,
+      "example": "123456789"
+    },
+    {
+      "name": "issue_date",
+      "label": "Cấp ngày:",
+      "type": "date",
+      "required": true,
+      "example": "01/01/2020"
+    },
+    {
+      "name": "address",
+      "label": "Địa chỉ thường trú:",
+      "type": "address",
+      "required": true,
+      "example": "123 Đường ABC"
+    },
+    {
+      "name": "ward",
+      "label": "Phường (xã, thị trấn):",
+      "type": "string",
+      "required": true,
+      "example": "Phường 1"
+    },
+    {
+      "name": "district",
+      "label": "Quận (huyện):",
+      "type": "string",
+      "required": true,
+      "example": "Quận 1"
+    },
+    {
+      "name": "land_address",
+      "label": "Xin tường trình về nguồn gốc sử dụng nhà, đất tại địa chỉ:",
+      "type": "address",
+      "required": true,
+      "example": "456 Đường XYZ"
+    },
+    {
+      "name": "land_area",
+      "label": "Có diện tích:",
+      "type": "string",
+      "required": true,
+      "example": "100m2"
+    },
+    {
+      "name": "land_plot_number",
+      "label": "Thuộc lô, thửa đất số:",
+      "type": "string",
+      "required": false,
+      "example": "123"
+    },
+    {
+      "name": "map_number",
+      "label": "Thuộc tờ bản đồ số:",
+      "type": "string",
+      "required": false,
+      "example": "456"
+    },
+    {
+      "name": "usage_time",
+      "label": "Thời điểm sử dụng:",
+      "type": "date",
+      "required": true,
+      "example": "01/01/2021"
+    },
+    {
+      "name": "usage_purpose",
+      "label": "Mục đích sử dụng:",
+      "type": "multiline",
+      "required": true,
+      "example": "Ở, kinh doanh"
+    },
+    {
+      "name": "commitment_reason",
+      "label": "Lý do xin cam kết:",
+      "type": "multiline",
+      "required": true,
+      "example": "Không có tranh chấp"
+    },
+    {
+      "name": "date_signed",
+      "label": "Ngày…....tháng….... năm............",
+      "type": "date",
+      "required": true,
+      "example": "01/01/2023"
+    },
+    {
+      "name": "signer_name",
+      "label": "Người làm đơn",
+      "type": "string",
+      "required": true,
+      "example": "Nguyễn Văn A"
+    }
+  ]
+}
