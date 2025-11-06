@@ -9,7 +9,9 @@
   "metadata": {
     "source_file": "mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2020/05/mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
-    "processed_at": "2025-11-06T15:35:50.119179",
+    "original_file_path": "forms/original_files/giay_cam_ket/original.doc",
+    "file_extension": ".doc",
+    "processed_at": "2025-11-06T16:02:29.588778",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -128,10 +130,10 @@
     },
     {
       "name": "chairman_signature",
-      "label": "TM. UBND (PHƯỜNG, XÃ, THỊ TRẤN) CHỦ TỊCH",
+      "label": "TM. UBND (PHƯỜNG, XÃ, THỊ TRẤN) CHỦ TỊCH (ký tên – đóng dấu)",
       "type": "string",
       "required": false,
-      "example": "Trần Văn B"
+      "example": "Nguyễn Văn B"
     }
   ]
 }
