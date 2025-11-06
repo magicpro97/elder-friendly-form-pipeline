@@ -185,6 +185,76 @@ class FormProcessor:
         return aliases[:3]
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
+    def _improve_title_with_ai(self, title: str, text: str) -> str:
+        """
+        Use AI to improve Vietnamese title extracted from filename
+
+        This fixes issues where filenames lose Vietnamese diacritics during download
+
+        Args:
+            title: Initial title (may be missing diacritics)
+            text: Full text content of the form
+
+        Returns:
+            Improved title with proper Vietnamese diacritics
+        """
+        if not self.client:
+            return title
+
+        # Only improve if title seems to be missing diacritics
+        # (has Latin chars but no Vietnamese diacritics)
+        has_diacritics = any(c in title for c in "àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ")
+        if has_diacritics:
+            # Title already has diacritics, no need to improve
+            return title
+
+        prompt = f"""Bạn là chuyên gia tiếng Việt. Nhiệm vụ: Sửa lại tiêu đề biểu mẫu để có dấu thanh điệu đúng.
+
+Tiêu đề hiện tại (có thể thiếu dấu): {title}
+
+Nội dung biểu mẫu (5 dòng đầu):
+{chr(10).join(text.split(chr(10))[:5])}
+
+Yêu cầu:
+1. Trả về tiêu đề tiếng Việt CÓ DẤU đầy đủ và chính xác
+2. Chỉ trả về tiêu đề, KHÔNG giải thích
+3. Giữ nguyên cấu trúc, chỉ thêm dấu thanh điệu
+4. Viết hoa chữ cái đầu mỗi từ quan trọng (trừ từ "của", "và", "cho")
+
+Ví dụ:
+- "Mau Don Xin Viec" → "Mẫu Đơn Xin Việc"
+- "Giay Uy Quyen" → "Giấy Ủy Quyền"
+- "To Khai Dang Ky" → "Tờ Khai Đăng Ký"
+
+Tiêu đề đã sửa:"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.openai_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Bạn là chuyên gia tiếng Việt. Chỉ trả về tiêu đề đã sửa, không giải thích.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.1,
+                max_tokens=100,
+            )
+
+            improved_title = response.choices[0].message.content
+            if improved_title:
+                improved_title = improved_title.strip().strip('"').strip("'")
+                logger.info(f"AI improved title: '{title}' → '{improved_title}'")
+                return improved_title
+
+            return title
+
+        except Exception as e:
+            logger.warning(f"AI title improvement failed: {e}, using original")
+            return title
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
     def _extract_fields_with_ai(self, text: str, title: str) -> list[dict[str, Any]]:
         """
         Use OpenAI to extract form fields from Vietnamese text
@@ -359,6 +429,9 @@ CHỈ trả về JSON, không giải thích thêm."""
         # Step 2: Extract title from filename or text
         title = self._extract_title(file_path.name, text)
 
+        # Step 2.5: Improve title with AI (add Vietnamese diacritics if missing)
+        title = self._improve_title_with_ai(title, text)
+
         # Step 3: Generate form_id
         form_id = self._generate_form_id(title)
 
@@ -402,26 +475,35 @@ CHỈ trả về JSON, không giải thích thêm."""
         Extract form title from filename or text
 
         Priority:
-        1. Extract from text (first line or heading pattern)
-        2. Clean filename
+        1. Extract from text (first line or heading pattern) - preserves Vietnamese diacritics
+        2. Clean filename - keep original Vietnamese characters
         """
-        # Try to find title pattern in text
+        # Try to find title pattern in text (preferred - keeps Vietnamese diacritics)
         lines = text.split("\n")
-        for line in lines[:5]:  # Check first 5 lines
+        for line in lines[:10]:  # Check first 10 lines (increased from 5)
             line = line.strip()
             if len(line) > 10 and len(line) < 100:
                 # Check if line contains form keywords
-                keywords = ["đơn", "giấy", "mẫu", "tờ khai", "biểu mẫu", "phiếu"]
+                keywords = ["đơn", "giấy", "mẫu", "tờ khai", "biểu mẫu", "phiếu", "bảng", "hồ sơ"]
                 if any(kw in line.lower() for kw in keywords):
-                    return line
+                    # Clean up common artifacts (page numbers, dates, etc.)
+                    cleaned = re.sub(r"\d{1,2}/\d{1,2}/\d{2,4}", "", line)  # Remove dates
+                    cleaned = re.sub(r"^[IVX\d]+[\.\)]\s*", "", cleaned)  # Remove numbering
+                    cleaned = cleaned.strip()
+                    if len(cleaned) > 10:
+                        return cleaned
 
-        # Fallback: Clean filename
+        # Fallback: Clean filename but preserve Vietnamese characters
+        # Don't use .title() as it breaks Vietnamese diacritics
         title = filename.replace(".pdf", "").replace(".doc", "").replace(".docx", "")
         title = title.replace("-", " ").replace("_", " ")
         title = " ".join(title.split())  # Normalize spaces
 
-        # Capitalize first letter of each word
-        return title.title()
+        # Capitalize only first letter, preserve rest (including Vietnamese)
+        if title:
+            title = title[0].upper() + title[1:]
+
+        return title
 
     def process_directory(self, input_dir: str = "crawler_output") -> list[dict[str, Any]]:
         """
@@ -513,25 +595,25 @@ def main():
         # Process single file
         file_path = Path(args.file)
         if not file_path.exists():
-            print(f"Error: File not found: {args.file}")
+            logger.error(f"File not found: {args.file}")
             return
 
         form_def = processor.process_file(file_path)
         if form_def:
-            print(json.dumps(form_def, ensure_ascii=False, indent=2))
+            logger.info(json.dumps(form_def, ensure_ascii=False, indent=2))
         else:
-            print("Processing failed")
+            logger.error("Processing failed")
     else:
         # Process directory
         forms = processor.process_directory(args.input)
         processor.save_index(forms)
 
-        print(f"\n{'='*60}")
-        print("Processing complete!")
-        print(f"{'='*60}")
-        print(f"Total forms: {len(forms)}")
-        print(f"Output: {args.output}")
-        print(f"Index: {args.output}/_index.json")
+        logger.info(f"\n{'=' * 60}")
+        logger.info("Processing complete!")
+        logger.info(f"{'=' * 60}")
+        logger.info(f"Total forms: {len(forms)}")
+        logger.info(f"Output: {args.output}")
+        logger.info(f"Index: {args.output}/_index.json")
 
 
 if __name__ == "__main__":
