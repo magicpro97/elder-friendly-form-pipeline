@@ -11,7 +11,7 @@
       "metadata": {
         "source_file": "mau-don-phan-to-co-huong-dan-cach-viet-don.docx",
         "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2015/09/mau-don-phan-to-co-huong-dan-cach-viet-don.docx",
-        "processed_at": "2025-11-06T02:39:34.543913",
+        "processed_at": "2025-11-06T15:03:37.577488",
         "ocr_confidence": 1.0,
         "ocr_method": "docx",
         "ocr_keywords": [
@@ -63,7 +63,7 @@
           "label": "Địa chỉ",
           "type": "address",
           "required": true,
-          "example": "123 Đường ABC, Quận 1, TP.HCM"
+          "example": "123 Đường ABC, Quận 1, TP. HCM"
         },
         {
           "name": "phone",
@@ -98,7 +98,7 @@
           "label": "NỘI DUNG PHẢN TỐ",
           "type": "multiline",
           "required": true,
-          "example": "Trình bày tóm tắt lại diễn biến sự việc dẫn tới tranh chấp"
+          "example": "Tóm tắt diễn biến sự việc..."
         },
         {
           "name": "request",
@@ -118,5 +118,5 @@
     }
   ],
   "count": 1,
-  "generated_at": "2025-11-06T02:39:34.544632"
+  "generated_at": "2025-11-06T15:03:37.579062"
 }
