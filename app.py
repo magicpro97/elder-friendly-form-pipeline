@@ -1403,8 +1403,7 @@ def shutdown_event():
         except Exception as e:
             logger.warning(f"Failed to close PostgreSQL: {e}")
 
-    # Close OpenAI HTTP client
-    global _http_client
+    # Close OpenAI HTTP client (read-only access, no need for global statement)
     if _http_client:
         _http_client.close()
         logger.info("Closed OpenAI HTTP client")
