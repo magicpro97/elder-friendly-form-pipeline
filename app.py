@@ -391,7 +391,9 @@ def pick_form(text: str) -> str | None:
 def generate_fallback_questions(form_meta: dict) -> list[dict]:
     """Generate simple fallback questions without AI (fast)"""
     questions = []
-    for f in form_meta["fields"]:
+    fields = form_meta["fields"]
+
+    for i, f in enumerate(fields):
         ex = f.get("example")
         optional_note = "" if f.get("required", True) else " (không bắt buộc, bác có thể bỏ qua)."
 
@@ -408,6 +410,60 @@ def generate_fallback_questions(form_meta: dict) -> list[dict]:
         if not label_lower:
             logger.warning(f"Field {f.get('name', 'unknown')} has empty label, using field name as fallback")
             label_lower = f.get("name", "thông tin").replace("_", " ")
+
+        # CRITICAL: Detect ambiguous labels that need context from previous field
+        # Common patterns: "cấp ngày", "tại", "nơi cấp", "ngày cấp", "do", etc.
+        ambiguous_patterns = ["cấp ngày", "tại", "nơi cấp", "ngày cấp", "do ", "của "]
+        needs_context = any(pattern in label_lower for pattern in ambiguous_patterns)
+
+        # Check if field name suggests it's related to previous field (issue_date after id_number)
+        field_name = f.get("name", "")
+        if i > 0 and ("issue" in field_name.lower() or "place" in field_name.lower() or needs_context):
+            # Look back to find the main subject (not just immediate previous field)
+            # For chains like: id_number → id_issue_date → id_issue_place
+            subject = None
+            for j in range(i - 1, max(i - 3, -1), -1):  # Look back up to 3 fields
+                check_field = fields[j]
+                check_label = check_field.get("label", "").lower().strip()
+                check_name = check_field.get("name", "")
+
+                # Stop if we hit another ambiguous field (don't chain ambiguous → ambiguous)
+                if any(pattern in check_label for pattern in ambiguous_patterns):
+                    continue
+
+                # Extract subject from document/ID fields
+                if any(x in check_label for x in ["cmnd", "cccd", "cmtnd"]):
+                    subject = "CMND/CCCD"
+                    break
+                elif any(x in check_label for x in ["hộ chiếu", "passport"]):
+                    subject = "hộ chiếu"
+                    break
+                elif any(x in check_label for x in ["giấy báo", "giấy chứng", "giấy khai"]):
+                    # Extract document name after "giấy" (case-insensitive)
+                    import re
+
+                    parts = re.split(r"giấy\s+", check_label)
+                    if len(parts) > 1:
+                        doc_name = parts[1].strip().split(":")[0].strip().split("/")[0].strip()
+                        subject = f"giấy {doc_name}" if doc_name else None
+                    break
+                elif "number" in check_name.lower() or "số" in check_label:
+                    # Generic document number field
+                    subject_text = check_label.replace("số", "").strip()
+                    if subject_text and len(subject_text) < 30:  # Reasonable length
+                        subject = subject_text.split("/")[0].strip()
+                    break
+
+            # Add context to ambiguous labels
+            if subject and needs_context:
+                if "cấp ngày" in label_lower or "ngày cấp" in label_lower:
+                    label_lower = f"{subject} {label_lower}"
+                elif label_lower == "tại" or label_lower.startswith("tại "):
+                    label_lower = f"{subject} cấp tại"
+                elif "nơi cấp" in label_lower:
+                    label_lower = f"nơi cấp {subject}"
+
+                logger.info(f"Added context to field {field_name}: '{f.get('label', '')}' → '{label_lower}'")
 
         # Do NOT inline example into the ask; provide it separately to avoid duplicate "Ví dụ:" when rendering
         ask = f"Bác cho cháu xin {label_lower} ạ.{optional_note}"
@@ -552,6 +608,14 @@ Yêu cầu về câu hỏi:
 - Trường không bắt buộc: nói rõ "(không bắt buộc, bác có thể bỏ qua)".
 - Nếu có ví dụ, thêm 1 ví dụ ngắn trong dấu "Ví dụ: …".
 - Viết sẵn câu nhắc lại (reprompt) lịch sự, khích lệ, không đổ lỗi.
+
+QUAN TRỌNG - Xử lý trường tối nghĩa:
+- Nếu trường có label tối nghĩa (như "cấp ngày", "tại", "nơi cấp", "do"), thêm context từ trường trước.
+- Ví dụ:
+  * Sau "Số CMND": "cấp ngày" → "CMND cấp ngày nào ạ?"
+  * Sau "Số CMND": "tại" → "CMND cấp tại đâu ạ?"
+  * Sau "Giấy khai sinh": "cấp ngày" → "Giấy khai sinh cấp ngày nào ạ?"
+- Luôn đảm bảo người nghe hiểu rõ đang hỏi về giấy tờ/thông tin nào.
 
 Chỉ trả về JSON đúng schema "questions_response" (không thêm lời dẫn hoặc giải thích).
     """
