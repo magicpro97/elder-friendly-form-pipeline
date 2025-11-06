@@ -40,8 +40,18 @@ class FormFiller:
     """Fill original form files with user answers"""
 
     def __init__(self):
-        self.temp_dir = Path(tempfile.gettempdir()) / "form_filler"
-        self.temp_dir.mkdir(exist_ok=True)
+        # Use Railway volume if available, otherwise use system temp dir
+        import os
+
+        railway_volume = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "/test")
+        if Path(railway_volume).exists() and os.access(railway_volume, os.W_OK):
+            self.temp_dir = Path(railway_volume) / "form_filler"
+            logger.info(f"Using Railway volume for temp files: {self.temp_dir}")
+        else:
+            self.temp_dir = Path(tempfile.gettempdir()) / "form_filler"
+            logger.info(f"Using system temp dir: {self.temp_dir}")
+
+        self.temp_dir.mkdir(exist_ok=True, parents=True)
 
     def fill_form(self, original_file: Path, answers: dict[str, Any], output_path: Path | None = None) -> Path:
         """
@@ -288,7 +298,8 @@ class FormFiller:
             Path to generated PDF
         """
         if output_path is None:
-            output_path = docx_file.with_suffix(".pdf")
+            # Save to temp_dir to ensure we have write permission
+            output_path = self.temp_dir / f"{docx_file.stem}.pdf"
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -347,8 +358,11 @@ def fill_and_export(original_file_path: str, answers: dict[str, Any], output_pdf
             return Path(output_pdf_path)
         return filled_file
     else:
-        # Convert .docx to PDF
-        output_path = Path(output_pdf_path) if output_pdf_path else filled_file.with_suffix(".pdf")
+        # Convert .docx to PDF - use temp_dir if no output specified
+        if output_pdf_path:
+            output_path = Path(output_pdf_path)
+        else:
+            output_path = filler.temp_dir / f"{filled_file.stem}.pdf"
         return filler.convert_to_pdf(filled_file, output_path)
 
 
