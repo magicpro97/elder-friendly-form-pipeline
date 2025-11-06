@@ -402,7 +402,13 @@ def generate_fallback_questions(form_meta: dict) -> list[dict]:
         else:
             ex_clean = None
 
-        label_lower = f.get("label", "").lower()
+        label_lower = f.get("label", "").lower().strip()
+
+        # CRITICAL: Validate label is not empty
+        if not label_lower:
+            logger.warning(f"Field {f.get('name', 'unknown')} has empty label, using field name as fallback")
+            label_lower = f.get("name", "thông tin").replace("_", " ")
+
         # Do NOT inline example into the ask; provide it separately to avoid duplicate "Ví dụ:" when rendering
         ask = f"Bác cho cháu xin {label_lower} ạ.{optional_note}"
         reprompt = f"Cháu xin phép chưa nghe rõ, bác nhắc lại {label_lower} giúp cháu với ạ."
@@ -446,6 +452,29 @@ async def generate_questions_async(form_id: str, form_meta: dict, session_id: st
         response_content = out.choices[0].message.content
         parsed_response = json.loads(response_content)
         questions = parsed_response["questions"]
+
+        # CRITICAL: Validate AI questions match form fields
+        field_names = [f["name"] for f in form_meta["fields"]]
+
+        # Check if number of questions matches number of fields
+        if len(questions) != len(field_names):
+            logger.warning(
+                f"AI questions count ({len(questions)}) != fields count ({len(field_names)}), using fallback"
+            )
+            return
+
+        # Validate each question has non-empty ask text
+        for i, q in enumerate(questions):
+            if not q.get("ask", "").strip():
+                logger.warning(f"Question {i} for field {q.get('name', 'unknown')} has empty 'ask', using fallback")
+                return
+
+            # Validate question name matches field name
+            if q.get("name") != field_names[i]:
+                logger.warning(
+                    f"Question name '{q.get('name')}' != field name '{field_names[i]}' at index {i}, using fallback"
+                )
+                return
 
         # Cache for future sessions
         QUESTIONS_CACHE[form_id] = questions
@@ -754,7 +783,21 @@ def question_next(request: Request, inp: TurnIn):
         if idx >= len(fields):
             return {"done": True, "message": "Đã thu thập đủ thông tin. Bạn có thể xem trước."}
 
+        # CRITICAL: Validate question index
+        if idx >= len(st["questions"]):
+            logger.error(f"Session {inp.session_id}: field_idx {idx} >= questions length {len(st['questions'])}")
+            st["questions"] = generate_fallback_questions(form)
+            get_session_manager().update(inp.session_id, st)
+
         q = st["questions"][idx]
+
+        # Validate question content
+        if not q.get("ask", "").strip():
+            field = fields[idx]
+            label = field.get("label", field.get("name", "thông tin")).lower()
+            q["ask"] = f"Bác cho cháu xin {label} ạ."
+            logger.warning(f"Session {inp.session_id}: Fixed empty question at index {idx}")
+
         total = len(fields)
         current_index = idx + 1
         progress = int((idx / total) * 100) if total else 0
@@ -807,7 +850,24 @@ def answer_field(request: Request, inp: AnswerReq):
                 return {"ok": True, "done": True, "message": "Đã đủ thông tin. Bạn có thể xem trước."}
 
             get_session_manager().update(inp.session_id, st)
+
+            # CRITICAL: Validate question index before access
+            if st["field_idx"] >= len(st["questions"]):
+                logger.error(
+                    f"Session {inp.session_id}: field_idx {st['field_idx']} >= questions length {len(st['questions'])}"
+                )
+                st["questions"] = generate_fallback_questions(form)
+                get_session_manager().update(inp.session_id, st)
+
             nxt = st["questions"][st["field_idx"]]
+
+            # Validate question content
+            if not nxt.get("ask", "").strip():
+                next_field = fields[st["field_idx"]]
+                label = next_field.get("label", next_field.get("name", "thông tin")).lower()
+                nxt["ask"] = f"Bác cho cháu xin {label} ạ."
+                logger.warning(f"Session {inp.session_id}: Fixed empty question at index {st['field_idx']}")
+
             logger.info(f"Session {inp.session_id}: Skipped optional field {field['name']}")
             total = len(fields)
             current_index = st["field_idx"] + 1
@@ -869,8 +929,30 @@ def answer_field(request: Request, inp: AnswerReq):
             return {"ok": True, "done": True, "message": "Đã đủ thông tin. Bạn có thể xem trước."}
 
         get_session_manager().update(inp.session_id, st)
+
+        # CRITICAL: Validate question index is within bounds
+        if st["field_idx"] >= len(st["questions"]):
+            logger.error(
+                f"Session {inp.session_id}: field_idx {st['field_idx']} >= questions length {len(st['questions'])}, "
+                f"regenerating fallback questions"
+            )
+            # Regenerate fallback questions to match fields
+            st["questions"] = generate_fallback_questions(form)
+            get_session_manager().update(inp.session_id, st)
+
         nxt = st["questions"][st["field_idx"]]
         next_field = fields[st["field_idx"]]
+
+        # Additional validation: ensure question has required fields
+        if not nxt.get("ask", "").strip():
+            logger.warning(
+                f"Session {inp.session_id}: Question at index {st['field_idx']} has empty 'ask', "
+                f"using field label: {next_field.get('label', next_field.get('name', 'thông tin'))}"
+            )
+            # Fallback to field label
+            label = next_field.get("label", next_field.get("name", "thông tin")).lower()
+            nxt["ask"] = f"Bác cho cháu xin {label} ạ."
+
         logger.debug(f"Session {inp.session_id}: Answer accepted, moving to next field")
         total = len(fields)
         current_index = st["field_idx"] + 1
@@ -923,8 +1005,24 @@ def confirm(request: Request, session_id: str = Query(...), yes: bool = Query(Tr
                 return {"ok": True, "done": True, "message": "Đã đủ thông tin. Bạn có thể xem trước."}
 
             get_session_manager().update(session_id, st)
+
+            # CRITICAL: Validate question index
+            if st["field_idx"] >= len(st["questions"]):
+                logger.error(
+                    f"Session {session_id}: field_idx {st['field_idx']} >= questions length {len(st['questions'])}"
+                )
+                st["questions"] = generate_fallback_questions(form)
+                get_session_manager().update(session_id, st)
+
             nxt = st["questions"][st["field_idx"]]
             next_field = form["fields"][st["field_idx"]]
+
+            # Validate question content
+            if not nxt.get("ask", "").strip():
+                label = next_field.get("label", next_field.get("name", "thông tin")).lower()
+                nxt["ask"] = f"Bác cho cháu xin {label} ạ."
+                logger.warning(f"Session {session_id}: Fixed empty question at index {st['field_idx']}")
+
             logger.info(f"Session {session_id}: Value confirmed, moving to next field")
             total = len(form["fields"])
             current_index = st["field_idx"] + 1
@@ -943,7 +1041,21 @@ def confirm(request: Request, session_id: str = Query(...), yes: bool = Query(Tr
             st["pending"] = {}
             st["stage"] = "ask"
             get_session_manager().update(session_id, st)
+
+            # CRITICAL: Validate question index
+            if idx >= len(st["questions"]):
+                logger.error(f"Session {session_id}: idx {idx} >= questions length {len(st['questions'])}")
+                st["questions"] = generate_fallback_questions(form)
+                get_session_manager().update(session_id, st)
+
             q = st["questions"][idx]
+
+            # Validate question content
+            if not q.get("ask", "").strip():
+                label = field.get("label", field.get("name", "thông tin")).lower()
+                q["ask"] = f"Bác cho cháu xin {label} ạ."
+                logger.warning(f"Session {session_id}: Fixed empty question at index {idx}")
+
             logger.info(f"Session {session_id}: Value rejected, requesting re-entry")
             total = len(form["fields"])
             current_index = idx + 1
