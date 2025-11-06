@@ -205,8 +205,12 @@ class FormProcessor:
         dest_file = storage_dir / f"original{source_file.suffix}"
         shutil.copy2(source_file, dest_file)
 
-        # Return relative path for portability
-        relative_path = str(dest_file.relative_to(Path.cwd()))
+        # Return relative path (make it absolute first if needed)
+        if dest_file.is_absolute():
+            relative_path = str(dest_file.relative_to(Path.cwd()))
+        else:
+            relative_path = str(dest_file)
+
         logger.info(f"Saved original file: {relative_path}")
 
         return relative_path
