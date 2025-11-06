@@ -441,6 +441,130 @@
       "source": "manual"
     },
     {
+      "form_id": "mau_don_xin_thong_tin_dat_dai",
+      "title": "Mẫu Đơn Xin Thông Tin Đất Đai",
+      "aliases": [
+        "mẫu đơn xin thông tin đất đai",
+        "đơn xin thông tin đất đai",
+        "mẫu  xin thông tin đất đai"
+      ],
+      "source": "crawler",
+      "metadata": {
+        "source_file": "10-mau-don-xin-thong-tin-dat-dai.doc",
+        "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/10/10-mau-don-xin-thong-tin-dat-dai.doc",
+        "processed_at": "2025-11-06T15:36:15.544592",
+        "ocr_confidence": 0.8,
+        "ocr_method": "doc_antiword",
+        "ocr_keywords": [
+          "mẫu",
+          "phiếu",
+          "giấy",
+          "hồ sơ",
+          "số"
+        ]
+      },
+      "fields": [
+        {
+          "name": "requester_name",
+          "label": "Tên tổ chức, cá nhân yêu cầu cung cấp dữ liệu",
+          "type": "string",
+          "required": true,
+          "example": "Công ty TNHH ABC"
+        },
+        {
+          "name": "representative_name",
+          "label": "Đại diện là ông (bà)",
+          "type": "string",
+          "required": true,
+          "example": "Nguyễn Văn A"
+        },
+        {
+          "name": "id_number",
+          "label": "Số CMTND/Hộ chiếu",
+          "type": "string",
+          "required": true,
+          "example": "123456789"
+        },
+        {
+          "name": "id_issue_date",
+          "label": "cấp ngày",
+          "type": "date",
+          "required": true,
+          "example": "01/01/2020"
+        },
+        {
+          "name": "id_issue_place",
+          "label": "tại",
+          "type": "string",
+          "required": true,
+          "example": "Hà Nội"
+        },
+        {
+          "name": "nationality",
+          "label": "Quốc tịch",
+          "type": "string",
+          "required": true,
+          "example": "Việt Nam"
+        },
+        {
+          "name": "address",
+          "label": "Địa chỉ",
+          "type": "address",
+          "required": true,
+          "example": "Số 1, Đường ABC, Quận 1, TP.HCM"
+        },
+        {
+          "name": "phone",
+          "label": "Số điện thoại",
+          "type": "phone",
+          "required": true,
+          "example": "0123456789"
+        },
+        {
+          "name": "fax",
+          "label": "fax",
+          "type": "string",
+          "required": false,
+          "example": "02812345678"
+        },
+        {
+          "name": "email",
+          "label": "E-mail",
+          "type": "email",
+          "required": false,
+          "example": "example@example.com"
+        },
+        {
+          "name": "land_plot_number",
+          "label": "Thửa đất số",
+          "type": "string",
+          "required": true,
+          "example": "123"
+        },
+        {
+          "name": "data_request_purpose",
+          "label": "Mục đích sử dụng dữ liệu",
+          "type": "multiline",
+          "required": true,
+          "example": "Để thực hiện dự án xây dựng"
+        },
+        {
+          "name": "data_access_method",
+          "label": "Hình thức khai thác, sử dụng và phương thức nhận kết quả",
+          "type": "string",
+          "required": true,
+          "example": "Nhận tại nơi cung cấp"
+        },
+        {
+          "name": "data_usage_commitment",
+          "label": "Cam kết sử dụng dữ liệu",
+          "type": "multiline",
+          "required": true,
+          "example": "Tôi cam đoan không sử dụng dữ liệu trái quy định"
+        }
+      ]
+    },
+    {
       "form_id": "10_mau_don_xin_thong_tin_dat_dai",
       "title": "10 Mau Don Xin Thong Tin Dat Dai",
       "aliases": [
@@ -564,7 +688,7 @@
     },
     {
       "form_id": "giay_cam_ket",
-      "title": "GIẤY CAM KẾT",
+      "title": "Giấy Cam Kết",
       "aliases": [
         "giấy cam kết",
         "cam kết"
@@ -573,7 +697,7 @@
       "metadata": {
         "source_file": "mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
         "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2020/05/mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
-        "processed_at": "2025-11-06T15:17:58.623289",
+        "processed_at": "2025-11-06T15:35:50.119179",
         "ocr_confidence": 0.8,
         "ocr_method": "doc_antiword",
         "ocr_keywords": [
@@ -607,7 +731,7 @@
           "example": "01/01/2020"
         },
         {
-          "name": "address",
+          "name": "permanent_address",
           "label": "Địa chỉ thường trú:",
           "type": "address",
           "required": true,
@@ -649,7 +773,7 @@
           "example": "123"
         },
         {
-          "name": "map_number",
+          "name": "map_sheet_number",
           "label": "Thuộc tờ bản đồ số:",
           "type": "string",
           "required": false,
@@ -689,12 +813,177 @@
           "type": "string",
           "required": true,
           "example": "Nguyễn Văn A"
+        },
+        {
+          "name": "chairman_signature",
+          "label": "TM. UBND (PHƯỜNG, XÃ, THỊ TRẤN) CHỦ TỊCH",
+          "type": "string",
+          "required": false,
+          "example": "Trần Văn B"
+        }
+      ]
+    },
+    {
+      "form_id": "to_khai_dang_ky_khai_tu",
+      "title": "Tờ Khai Đăng Ký Khai Tử",
+      "aliases": [
+        "tờ khai đăng ký khai tử",
+        "đăng ký khai tử"
+      ],
+      "source": "crawler",
+      "metadata": {
+        "source_file": "mau-to-khai-dang-ky-khai-tu.doc",
+        "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/11/mau-to-khai-dang-ky-khai-tu.doc",
+        "processed_at": "2025-11-06T15:35:34.342913",
+        "ocr_confidence": 0.8,
+        "ocr_method": "doc_antiword",
+        "ocr_keywords": [
+          "tờ khai",
+          "giấy",
+          "số",
+          "ngày",
+          "tháng"
+        ]
+      },
+      "fields": [
+        {
+          "name": "requester_full_name",
+          "label": "Họ, chữ đệm, tên người yêu cầu:",
+          "type": "string",
+          "required": true,
+          "example": "Nguyễn Văn A"
+        },
+        {
+          "name": "requester_address",
+          "label": "Nơi cư trú:",
+          "type": "address",
+          "required": true,
+          "example": "123 Đường ABC, Phường XYZ, Quận 1, TP.HCM"
+        },
+        {
+          "name": "requester_id_document",
+          "label": "Giấy tờ tùy thân",
+          "type": "string",
+          "required": true,
+          "example": "Chứng minh nhân dân số 001089123"
+        },
+        {
+          "name": "relationship_to_deceased",
+          "label": "Quan hệ với người đã chết:",
+          "type": "string",
+          "required": true,
+          "example": "Cha"
+        },
+        {
+          "name": "deceased_full_name",
+          "label": "Họ, chữ đệm, tên:",
+          "type": "string",
+          "required": true,
+          "example": "Nguyễn Văn B"
+        },
+        {
+          "name": "deceased_gender",
+          "label": "Giới tính:",
+          "type": "string",
+          "required": true,
+          "example": "Nam"
+        },
+        {
+          "name": "deceased_dob",
+          "label": "Ngày, tháng, năm sinh:",
+          "type": "date",
+          "required": true,
+          "example": "01/01/1980"
+        },
+        {
+          "name": "deceased_ethnicity",
+          "label": "Dân tộc:",
+          "type": "string",
+          "required": true,
+          "example": "Kinh"
+        },
+        {
+          "name": "deceased_nationality",
+          "label": "Quốc tịch:",
+          "type": "string",
+          "required": true,
+          "example": "Việt Nam"
+        },
+        {
+          "name": "deceased_last_address",
+          "label": "Nơi cư trú cuối cùng:",
+          "type": "address",
+          "required": true,
+          "example": "456 Đường DEF, Phường UVW, Quận 2, TP.HCM"
+        },
+        {
+          "name": "deceased_id_document",
+          "label": "Giấy tờ tùy thân:",
+          "type": "string",
+          "required": true,
+          "example": "Giấy chứng tử số 123456"
+        },
+        {
+          "name": "death_time",
+          "label": "Đã chết vào lúc:",
+          "type": "string",
+          "required": true,
+          "example": "14 giờ 30 phút, ngày 15 tháng 10 năm 2023"
+        },
+        {
+          "name": "place_of_death",
+          "label": "Nơi chết:",
+          "type": "string",
+          "required": true,
+          "example": "Bệnh viện XYZ"
+        },
+        {
+          "name": "cause_of_death",
+          "label": "Nguyên nhân chết:",
+          "type": "string",
+          "required": true,
+          "example": "Bệnh tim"
+        },
+        {
+          "name": "death_certificate_number",
+          "label": "Số Giấy báo tử/ Giấy tờ thay thế Giấy báo tử:",
+          "type": "string",
+          "required": true,
+          "example": "GB123456"
+        },
+        {
+          "name": "certificate_issue_date",
+          "label": "cấp ngày tháng năm:",
+          "type": "date",
+          "required": true,
+          "example": "20/10/2023"
+        },
+        {
+          "name": "request_location",
+          "label": "Làm tại:",
+          "type": "address",
+          "required": true,
+          "example": "TP.HCM"
+        },
+        {
+          "name": "request_date",
+          "label": "ngày tháng năm:",
+          "type": "date",
+          "required": true,
+          "example": "20/10/2023"
+        },
+        {
+          "name": "requester_signature",
+          "label": "Người yêu cầu (Ký, ghi rõ họ, chữ đệm, tên):",
+          "type": "string",
+          "required": true,
+          "example": "Nguyễn Văn A"
         }
       ]
     },
     {
       "form_id": "don_phan_to",
-      "title": "ĐƠN PHẢN TỐ",
+      "title": "Đơn Phản Tố",
       "aliases": [
         "đơn phản tố",
         "phản tố"
@@ -703,7 +992,7 @@
       "metadata": {
         "source_file": "mau-don-phan-to-co-huong-dan-cach-viet-don.docx",
         "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2015/09/mau-don-phan-to-co-huong-dan-cach-viet-don.docx",
-        "processed_at": "2025-11-06T15:18:14.785925",
+        "processed_at": "2025-11-06T15:36:01.568203",
         "ocr_confidence": 1.0,
         "ocr_method": "docx",
         "ocr_keywords": [
@@ -741,7 +1030,7 @@
           "label": "Cấp ngày",
           "type": "date",
           "required": true,
-          "example": "01/01/2020"
+          "example": "01/01/2010"
         },
         {
           "name": "id_issue_place",
@@ -772,39 +1061,32 @@
           "example": "example@gmail.com"
         },
         {
-          "name": "case_number",
-          "label": "Vụ án",
-          "type": "string",
-          "required": true,
-          "example": "Vụ án số 123/2023"
-        },
-        {
-          "name": "plaintiff_name",
-          "label": "Nguyên đơn",
-          "type": "string",
-          "required": true,
-          "example": "Trần Thị B"
-        },
-        {
-          "name": "content",
+          "name": "dispute_summary",
           "label": "NỘI DUNG PHẢN TỐ",
           "type": "multiline",
           "required": true,
-          "example": "Tóm tắt diễn biến sự việc..."
+          "example": "Tóm tắt sự việc dẫn tới tranh chấp..."
         },
         {
-          "name": "request",
-          "label": "YÊU CẦU PHẢN TỐ",
-          "type": "multiline",
+          "name": "request_1",
+          "label": "Thứ nhất",
+          "type": "string",
           "required": true,
-          "example": "Thứ nhất, yêu cầu A; Thứ hai, yêu cầu B."
+          "example": "Yêu cầu giải quyết vấn đề A"
         },
         {
-          "name": "document_list",
-          "label": "Danh mục tài liệu, chúng cứ kèm theo (nếu có)",
-          "type": "multiline",
+          "name": "request_2",
+          "label": "Thứ hai",
+          "type": "string",
           "required": false,
-          "example": "Tài liệu 1; Tài liệu 2."
+          "example": "Yêu cầu giải quyết vấn đề B"
+        },
+        {
+          "name": "request_3",
+          "label": "Thứ ba",
+          "type": "string",
+          "required": false,
+          "example": "Yêu cầu giải quyết vấn đề C"
         }
       ]
     },
@@ -966,10 +1248,10 @@
       ]
     }
   ],
-  "count": 9,
+  "count": 11,
   "sources": {
     "manual": 5,
-    "crawler": 4
+    "crawler": 6
   },
-  "generated_at": "2025-11-06T15:18:29.763971"
+  "generated_at": "2025-11-06T15:36:15.726720"
 }

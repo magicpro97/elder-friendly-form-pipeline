@@ -1,6 +1,6 @@
 {
   "form_id": "giay_cam_ket",
-  "title": "GIẤY CAM KẾT",
+  "title": "Giấy Cam Kết",
   "aliases": [
     "giấy cam kết",
     "cam kết"
@@ -9,7 +9,7 @@
   "metadata": {
     "source_file": "mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2020/05/mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
-    "processed_at": "2025-11-06T15:17:58.623289",
+    "processed_at": "2025-11-06T15:35:50.119179",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -43,7 +43,7 @@
       "example": "01/01/2020"
     },
     {
-      "name": "address",
+      "name": "permanent_address",
       "label": "Địa chỉ thường trú:",
       "type": "address",
       "required": true,
@@ -85,7 +85,7 @@
       "example": "123"
     },
     {
-      "name": "map_number",
+      "name": "map_sheet_number",
       "label": "Thuộc tờ bản đồ số:",
       "type": "string",
       "required": false,
@@ -125,6 +125,13 @@
       "type": "string",
       "required": true,
       "example": "Nguyễn Văn A"
+    },
+    {
+      "name": "chairman_signature",
+      "label": "TM. UBND (PHƯỜNG, XÃ, THỊ TRẤN) CHỦ TỊCH",
+      "type": "string",
+      "required": false,
+      "example": "Trần Văn B"
     }
   ]
 }
