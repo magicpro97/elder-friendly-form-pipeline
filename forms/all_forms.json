@@ -451,7 +451,7 @@
       "metadata": {
         "source_file": "mau-don-phan-to-co-huong-dan-cach-viet-don.docx",
         "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2015/09/mau-don-phan-to-co-huong-dan-cach-viet-don.docx",
-        "processed_at": "2025-11-05T15:07:55.428765",
+        "processed_at": "2025-11-06T02:39:34.543913",
         "ocr_confidence": 1.0,
         "ocr_method": "docx",
         "ocr_keywords": [
@@ -489,7 +489,7 @@
           "label": "Cấp ngày",
           "type": "date",
           "required": true,
-          "example": "01/01/2010"
+          "example": "01/01/2020"
         },
         {
           "name": "id_issue_place",
@@ -545,14 +545,14 @@
           "label": "YÊU CẦU PHẢN TỐ",
           "type": "multiline",
           "required": true,
-          "example": "Đề nghị Quý Tòa án xem xét giải quyết những vấn đề sau"
+          "example": "Thứ nhất, yêu cầu A; Thứ hai, yêu cầu B"
         },
         {
           "name": "document_list",
           "label": "Danh mục tài liệu, chúng cứ kèm theo (nếu có)",
           "type": "multiline",
           "required": false,
-          "example": "Tài liệu 1, Tài liệu 2"
+          "example": "Tài liệu 1; Tài liệu 2"
         }
       ]
     }
@@ -562,5 +562,5 @@
     "manual": 5,
     "crawler": 1
   },
-  "generated_at": "2025-11-05T15:07:55.588309"
+  "generated_at": "2025-11-06T02:39:34.693689"
 }
