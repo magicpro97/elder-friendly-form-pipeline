@@ -1,62 +1,91 @@
+version: "3.9"
+name: formbot
+
+networks:
+  backend:
+
+volumes:
+  mongo_data:
+
 services:
-  # Redis for session storage
-  redis:
-    image: redis:7-alpine
-    container_name: fastapi_form_redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
+  mongodb:
+    image: mongo:6
+    container_name: mongodb
+    ports: ["27017:27017"]
     volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+      - mongo_data:/data/db
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 })"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - form_network
+    networks: [backend]
 
-  # FastAPI application
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: fastapi_form_app
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
+  api:
+    build: ./api
+    container_name: api
+    env_file: .env
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - SESSION_TTL_SECONDS=3600
-    depends_on:
-      redis:
-        condition: service_healthy
+      MONGODB_URI: mongodb://mongodb:27017/forms
+      API_PORT: 8000
+      OPENAI_MODEL: gpt-4o-mini
+      CORS_ORIGINS: "*"
     volumes:
-      - ./forms:/app/forms:ro
-      - ./templates:/app/templates:ro
-    networks:
-      - form_network
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import requests; requests.get('http://localhost:8000/forms')",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      - ./api/app:/app/app:rw
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports: ["8000:8000"]
+    networks: [backend]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
-networks:
-  form_network:
-    driver: bridge
+  frontend:
+    build: 
+      context: ./frontend
+      target: dev
+    container_name: frontend
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      NODE_ENV: development
+    volumes:
+      - ./frontend:/app:rw
+      - /app/node_modules
+      - /app/.next
+    ports: ["3000:3000"]
+    depends_on: [api]
+    networks: [backend]
+    command: ["npm", "run", "dev"]
 
-volumes:
-  redis_data:
-    driver: local
+  crawler:
+    build: ./crawler
+    container_name: crawler
+    env_file: .env
+    environment:
+      AWS_REGION: ${AWS_REGION}
+      FORMS_BUCKET: ${FORMS_BUCKET}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+    volumes:
+      - ./crawler/app:/app/app:rw
+    command: ["python", "-m", "app.main", "--cron=0 3 * * *"]
+    networks: [backend]
+
+  worker:
+    build: ./worker
+    container_name: worker
+    env_file: .env
+    volumes:
+      - ./worker/app:/app/app:rw
+    environment:
+      AWS_REGION: ${AWS_REGION}
+      FORMS_BUCKET: ${FORMS_BUCKET}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      FORMS_QUEUE_URL: ${FORMS_QUEUE_URL}
+      MONGODB_URI: mongodb://mongodb:27017/forms
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks: [backend]
+
+
+
