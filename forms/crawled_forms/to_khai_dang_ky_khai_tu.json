@@ -11,7 +11,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/11/mau-to-khai-dang-ky-khai-tu.doc",
     "original_file_path": "forms/original_files/to_khai_dang_ky_khai_tu/original.doc",
     "file_extension": ".doc",
-    "processed_at": "2025-11-06T16:02:01.195742",
+    "processed_at": "2025-11-07T02:42:10.834657",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -49,7 +49,7 @@
       "label": "Quan hệ với người đã chết:",
       "type": "string",
       "required": true,
-      "example": "Cha"
+      "example": "Chồng"
     },
     {
       "name": "deceased_full_name",
@@ -76,14 +76,14 @@
       "name": "deceased_ethnicity",
       "label": "Dân tộc:",
       "type": "string",
-      "required": false,
+      "required": true,
       "example": "Kinh"
     },
     {
       "name": "deceased_nationality",
       "label": "Quốc tịch:",
       "type": "string",
-      "required": false,
+      "required": true,
       "example": "Việt Nam"
     },
     {
@@ -97,15 +97,15 @@
       "name": "deceased_id_document",
       "label": "Giấy tờ tùy thân:",
       "type": "string",
-      "required": false,
-      "example": "Giấy khai sinh số 123456"
+      "required": true,
+      "example": "Giấy chứng tử số 123456"
     },
     {
       "name": "death_time",
       "label": "Đã chết vào lúc:",
       "type": "string",
       "required": true,
-      "example": "10 giờ 30 phút, ngày 15 tháng 10 năm 2023"
+      "example": "14 giờ 30 phút, ngày 15 tháng 10 năm 2023"
     },
     {
       "name": "place_of_death",
@@ -118,7 +118,7 @@
       "name": "cause_of_death",
       "label": "Nguyên nhân chết:",
       "type": "string",
-      "required": false,
+      "required": true,
       "example": "Bệnh tim"
     },
     {
@@ -126,28 +126,28 @@
       "label": "Số Giấy báo tử/ Giấy tờ thay thế Giấy báo tử:",
       "type": "string",
       "required": true,
-      "example": "123456789"
+      "example": "GB123456"
     },
     {
-      "name": "certificate_issued_date",
+      "name": "certificate_issue_date",
       "label": "cấp ngày tháng năm",
       "type": "date",
       "required": true,
       "example": "20/10/2023"
     },
     {
-      "name": "request_location",
+      "name": "declaration_location",
       "label": "Làm tại:",
       "type": "address",
       "required": true,
       "example": "TP.HCM"
     },
     {
-      "name": "request_date",
+      "name": "declaration_date",
       "label": "ngày tháng năm",
       "type": "date",
       "required": true,
-      "example": "15/10/2023"
+      "example": "20/10/2023"
     },
     {
       "name": "requester_signature",
