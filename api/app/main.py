@@ -142,6 +142,45 @@ def _openai_client() -> Optional[OpenAI]:
     return OpenAI(api_key=api_key)
 
 
+def _make_friendly_question(field: Dict[str, Any]) -> str:
+    """Generate a friendly question text from field metadata"""
+    field_id = field.get("id", "")
+    label = field.get("label", field_id)
+    field_type = field.get("type", "text")
+    
+    # Vietnamese friendly question templates
+    templates = {
+        "email": "Vui lòng cho tôi biết địa chỉ email của bạn",
+        "phone": "Bạn có thể cung cấp số điện thoại liên hệ không?",
+        "tel": "Bạn có thể cung cấp số điện thoại liên hệ không?",
+        "date": "Bạn có thể cho biết ngày tháng không?",
+        "number": f"Vui lòng nhập {label.lower()}",
+        "text": f"Vui lòng cho tôi biết {label.lower()} của bạn",
+    }
+    
+    # Check if label contains common keywords
+    label_lower = label.lower()
+    
+    if "email" in label_lower or "mail" in label_lower:
+        return "Vui lòng cho tôi biết địa chỉ email của bạn"
+    elif "phone" in label_lower or "điện thoại" in label_lower or "sdt" in label_lower:
+        return "Bạn có thể cung cấp số điện thoại liên hệ không?"
+    elif "date" in label_lower or "ngày" in label_lower:
+        return f"Bạn có thể cho biết {label.lower()} không?"
+    elif "name" in label_lower or "tên" in label_lower or "họ" in label_lower:
+        return f"Vui lòng cho tôi biết {label.lower()} của bạn"
+    elif "address" in label_lower or "địa chỉ" in label_lower or "đia chi" in label_lower:
+        return f"Bạn có thể cung cấp {label.lower()} không?"
+    elif "job" in label_lower or "nghề" in label_lower or "công việc" in label_lower:
+        return f"Vui lòng cho biết {label.lower()} của bạn"
+    else:
+        # Use type-based template or generic
+        if field_type in templates:
+            return templates[field_type]
+        else:
+            return f"Vui lòng nhập thông tin về {label.lower()}"
+
+
 async def generate_next_question(form_schema: Dict[str, Any], answers: Dict[str, Any]) -> NextQuestionResponse:
     # If no OpenAI key, fallback to deterministic next unanswered field
     unanswered = [f for f in form_schema.get("fields", []) if f.get("id") not in answers]
@@ -150,28 +189,45 @@ async def generate_next_question(form_schema: Dict[str, Any], answers: Dict[str,
 
     client = _openai_client()
     if client is None:
+        # Use friendly question generator instead of raw label
         field = unanswered[0]
+        friendly_text = _make_friendly_question(field)
         return NextQuestionResponse(
-            nextQuestion=Question(id=field["id"], text=field.get("label", field["id"]), type=field.get("type", "text"), required=field.get("required", True)),
+            nextQuestion=Question(
+                id=field["id"], 
+                text=friendly_text, 
+                type=field.get("type", "text"), 
+                required=field.get("required", True)
+            ),
             missingFields=[f["id"] for f in unanswered],
             done=False,
         )
 
-    # With OpenAI: request JSON-structured next question
-    system = "You are a helpful assistant generating the next single question for a form filling flow. Always return JSON only."
-    user = {
-        "form_schema": form_schema,
-        "answers": answers,
-    }
+    # With OpenAI: request JSON-structured next question with better prompt
+    system = """You are a friendly Vietnamese assistant helping users fill out forms.
+Generate natural, conversational questions in Vietnamese that are warm and helpful.
+Always return JSON with format: {"nextQuestion": {"id": "field_id", "text": "friendly question", "type": "text"}, "missingFields": [], "done": false}
+Make questions conversational, not just field labels."""
+    
+    user_prompt = f"""Based on this form schema and already provided answers, generate the next question:
+
+Form title: {form_schema.get('title', 'Form')}
+All fields: {[{"id": f["id"], "label": f.get("label"), "type": f.get("type")} for f in form_schema.get("fields", [])]}
+Already answered: {list(answers.keys())}
+
+Generate a friendly, conversational Vietnamese question for the next unanswered field.
+Example: Instead of "Phone", ask "Bạn có thể cho tôi biết số điện thoại của bạn không?"
+"""
+    
     try:
         resp = client.chat.completions.create(
             model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system},
-                {"role": "user", "content": str(user)},
+                {"role": "user", "content": user_prompt},
             ],
-            temperature=0.2,
+            temperature=0.7,  # Increased for more natural language
         )
         content = resp.choices[0].message.content or "{}"
         import json
@@ -192,11 +248,18 @@ async def generate_next_question(form_schema: Dict[str, Any], answers: Dict[str,
             missingFields=[str(x) for x in data.get("missingFields", [])],
             done=bool(data.get("done", False)),
         )
-    except Exception:
-        # Fallback on any OpenAI issue
+    except Exception as e:
+        # Fallback with friendly question generator
+        print(f"OpenAI error: {e}, using friendly fallback")
         field = unanswered[0]
+        friendly_text = _make_friendly_question(field)
         return NextQuestionResponse(
-            nextQuestion=Question(id=field["id"], text=field.get("label", field["id"]), type=field.get("type", "text"), required=field.get("required", True)),
+            nextQuestion=Question(
+                id=field["id"], 
+                text=friendly_text, 
+                type=field.get("type", "text"), 
+                required=field.get("required", True)
+            ),
             missingFields=[f["id"] for f in unanswered],
             done=False,
         )
