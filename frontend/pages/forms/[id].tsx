@@ -5,7 +5,7 @@ import axios from 'axios'
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 
 interface Message {
-  type: 'bot' | 'user'
+  type: 'bot' | 'user' | 'warning' | 'error'
   text: string
   fieldId?: string
 }
@@ -89,20 +89,63 @@ export default function FormChat() {
         lastAnswer: { fieldId: question.id, value: userAnswer }
       })
       
-      setQuestion(nq.data.nextQuestion)
-      setDone(nq.data.done)
+      // Check validation result
+      const validation = nq.data.validation
       
-      if (nq.data.done) {
+      if (validation && !validation.isValid) {
+        // Answer is invalid - show error and ask again
         setMessages([...newMessages, {
+          type: 'error',
+          text: validation.message || 'Câu trả lời không hợp lệ. Vui lòng thử lại.',
+        }, {
           type: 'bot',
-          text: 'Cảm ơn bạn! Bạn đã hoàn thành tất cả các câu hỏi. Bạn có muốn tải biểu mẫu đã điền không?',
+          text: question.text, // Ask the same question again
+          fieldId: question.id,
         }])
-      } else if (nq.data.nextQuestion) {
-        setMessages([...newMessages, {
-          type: 'bot',
-          text: nq.data.nextQuestion.text,
-          fieldId: nq.data.nextQuestion.id,
-        }])
+        setLoading(false)
+        inputRef.current?.focus()
+        return
+      }
+      
+      if (validation && validation.needsConfirmation) {
+        // Answer needs confirmation - show warning but continue
+        const confirmMessages = [...newMessages, {
+          type: 'warning',
+          text: `⚠️ ${validation.message || 'Vui lòng kiểm tra lại câu trả lời của bạn.'}`,
+        }]
+        
+        setQuestion(nq.data.nextQuestion)
+        setDone(nq.data.done)
+        
+        if (nq.data.done) {
+          setMessages([...confirmMessages, {
+            type: 'bot',
+            text: 'Cảm ơn bạn! Bạn đã hoàn thành tất cả các câu hỏi. Bạn có muốn tải biểu mẫu đã điền không?',
+          }])
+        } else if (nq.data.nextQuestion) {
+          setMessages([...confirmMessages, {
+            type: 'bot',
+            text: nq.data.nextQuestion.text,
+            fieldId: nq.data.nextQuestion.id,
+          }])
+        }
+      } else {
+        // Answer is valid - continue normally
+        setQuestion(nq.data.nextQuestion)
+        setDone(nq.data.done)
+        
+        if (nq.data.done) {
+          setMessages([...newMessages, {
+            type: 'bot',
+            text: 'Cảm ơn bạn! Bạn đã hoàn thành tất cả các câu hỏi. Bạn có muốn tải biểu mẫu đã điền không?',
+          }])
+        } else if (nq.data.nextQuestion) {
+          setMessages([...newMessages, {
+            type: 'bot',
+            text: nq.data.nextQuestion.text,
+            fieldId: nq.data.nextQuestion.id,
+          }])
+        }
       }
     } catch (error) {
       console.error('Error submitting answer:', error)
@@ -229,6 +272,20 @@ export default function FormChat() {
       color: 'white',
       borderBottomRightRadius: '4px',
     },
+    messageBubbleWarning: {
+      background: '#fff3cd',
+      color: '#856404',
+      border: '1px solid #ffeaa7',
+      borderBottomLeftRadius: '4px',
+      boxShadow: '0 2px 8px rgba(255,193,7,0.2)',
+    },
+    messageBubbleError: {
+      background: '#f8d7da',
+      color: '#721c24',
+      border: '1px solid #f5c6cb',
+      borderBottomLeftRadius: '4px',
+      boxShadow: '0 2px 8px rgba(220,53,69,0.2)',
+    },
     inputContainer: {
       padding: '1.5rem 2rem',
       background: 'white',
@@ -322,13 +379,17 @@ export default function FormChat() {
               key={idx}
               style={{
                 ...styles.message,
-                ...(msg.type === 'bot' ? styles.messageBot : styles.messageUser),
+                ...(msg.type === 'user' ? styles.messageUser : styles.messageBot),
               }}
             >
               <div
                 style={{
                   ...styles.messageBubble,
-                  ...(msg.type === 'bot' ? styles.messageBubbleBot : styles.messageBubbleUser),
+                  ...(msg.type === 'bot' ? styles.messageBubbleBot : 
+                      msg.type === 'user' ? styles.messageBubbleUser :
+                      msg.type === 'warning' ? styles.messageBubbleWarning :
+                      msg.type === 'error' ? styles.messageBubbleError :
+                      styles.messageBubbleBot),
                 }}
               >
                 {msg.text}

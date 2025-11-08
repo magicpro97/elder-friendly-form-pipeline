@@ -31,10 +31,17 @@ class Question(BaseModel):
     required: bool = True
 
 
+class ValidationResponse(BaseModel):
+    isValid: bool
+    message: Optional[str] = None
+    needsConfirmation: bool = False
+
+
 class NextQuestionResponse(BaseModel):
     nextQuestion: Optional[Question] = None
     missingFields: List[str] = []
     done: bool = False
+    validation: Optional[ValidationResponse] = None  # Validation result for last answer
 
 
 class StartSessionRequest(BaseModel):
@@ -178,7 +185,82 @@ def _make_friendly_question(field: Dict[str, Any]) -> str:
         if field_type in templates:
             return templates[field_type]
         else:
-            return f"Vui lòng nhập thông tin về {label.lower()}"
+            return f"Vui lòng cung cấp thông tin về {label.lower()}"
+
+
+async def _validate_answer_with_openai(question: str, answer: Any, field_type: str) -> ValidationResponse:
+    """Validate if the answer is appropriate for the question using OpenAI"""
+    client = _openai_client()
+    
+    # If no OpenAI available, skip validation
+    if client is None:
+        return ValidationResponse(isValid=True, needsConfirmation=False)
+    
+    # Basic validation first (empty, too short, etc.)
+    answer_str = str(answer).strip()
+    if not answer_str or len(answer_str) < 1:
+        return ValidationResponse(
+            isValid=False,
+            message="Câu trả lời không được để trống",
+            needsConfirmation=False
+        )
+    
+    try:
+        system_prompt = """Bạn là trợ lý kiểm tra độ phù hợp của câu trả lời với câu hỏi trong biểu mẫu.
+Nhiệm vụ: Xác định câu trả lời có phù hợp với câu hỏi không.
+
+Trả về JSON với format:
+{
+  "isValid": true/false,
+  "message": "lý do nếu không hợp lệ hoặc cần xác nhận",
+  "needsConfirmation": true/false
+}
+
+Tiêu chí:
+- isValid=false: Câu trả lời hoàn toàn không liên quan, sai định dạng nghiêm trọng (vd: "abc" cho số điện thoại)
+- isValid=true, needsConfirmation=true: Câu trả lời có vẻ không chính xác nhưng có thể đúng (vd: số điện thoại thiếu số)
+- isValid=true, needsConfirmation=false: Câu trả lời hợp lệ
+
+Ví dụ:
+- Hỏi email, trả "john@email.com" → valid, không cần confirm
+- Hỏi số điện thoại, trả "0901234567" → valid, không cần confirm
+- Hỏi số điện thoại, trả "090123" → valid nhưng cần confirm (thiếu số?)
+- Hỏi email, trả "abc" → invalid
+- Hỏi tên, trả "Nguyễn Văn A" → valid, không cần confirm"""
+
+        user_prompt = f"""Câu hỏi: {question}
+Loại trường: {field_type}
+Câu trả lời: {answer_str}
+
+Kiểm tra câu trả lời có hợp lệ không?"""
+
+        response = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=200
+        )
+        
+        if not response.choices or not response.choices[0].message.content:
+            return ValidationResponse(isValid=True, needsConfirmation=False)
+        
+        import json
+        result = json.loads(response.choices[0].message.content)
+        
+        return ValidationResponse(
+            isValid=result.get("isValid", True),
+            message=result.get("message"),
+            needsConfirmation=result.get("needsConfirmation", False)
+        )
+        
+    except Exception as e:
+        print(f"[validation] OpenAI validation error: {e}")
+        # On error, allow the answer (don't block user)
+        return ValidationResponse(isValid=True, needsConfirmation=False)
 
 
 async def generate_next_question(form_schema: Dict[str, Any], answers: Dict[str, Any]) -> NextQuestionResponse:
@@ -315,9 +397,55 @@ async def next_question(session_id: str, payload: NextQuestionRequest, request: 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    form = await db.forms.find_one({"id": session["formId"]}, {"_id": 0})
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+
+    validation_result = None
+    
+    # Validate answer if provided
     if payload.lastAnswer is not None:
+        # Find the field to get question text and type
+        field = next((f for f in form.get("fields", []) if f.get("id") == payload.lastAnswer.fieldId), None)
+        
+        if field:
+            # Get the question text (try to find it from previous session state or generate it)
+            question_text = _make_friendly_question(field)
+            field_type = field.get("type", "text")
+            
+            # Validate the answer
+            validation_result = await _validate_answer_with_openai(
+                question=question_text,
+                answer=payload.lastAnswer.value,
+                field_type=field_type
+            )
+            
+            # If validation failed completely, return error response with validation info
+            if not validation_result.isValid:
+                # Don't save the answer, return validation error
+                resp = await generate_next_question(form_schema=form, answers=session.get("answers", {}))
+                resp.validation = validation_result
+                return resp
+            
+            # If needs confirmation, return current state with validation warning
+            if validation_result.needsConfirmation:
+                # Save the answer but ask for confirmation
+                session.setdefault("answers", {})[payload.lastAnswer.fieldId] = payload.lastAnswer.value
+                updates = {
+                    "answers": session["answers"],
+                    "lastActiveAt": int(__import__('time').time()),
+                }
+                await db.sessions.update_one(
+                    {"_id": session.get("_id")},
+                    {"$set": updates, "$inc": {"answerCount": 1}}
+                )
+                # Return next question with validation warning
+                resp = await generate_next_question(form_schema=form, answers=session["answers"])
+                resp.validation = validation_result
+                return resp
+        
+        # Answer is valid, save it
         session.setdefault("answers", {})[payload.lastAnswer.fieldId] = payload.lastAnswer.value
-        # update session metadata
         updates = {
             "answers": session["answers"],
             "lastActiveAt": int(__import__('time').time()),
@@ -327,11 +455,9 @@ async def next_question(session_id: str, payload: NextQuestionRequest, request: 
             {"$set": updates, "$inc": {"answerCount": 1}}
         )
 
-    form = await db.forms.find_one({"id": session["formId"]}, {"_id": 0})
-    if not form:
-        raise HTTPException(status_code=404, detail="Form not found")
-
     resp = await generate_next_question(form_schema=form, answers=session["answers"])
+    if validation_result:
+        resp.validation = validation_result
     return resp
 
 
