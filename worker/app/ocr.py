@@ -8,6 +8,13 @@ import pytesseract
 from pdf2image import convert_from_bytes
 from PIL import Image
 
+# OpenAI for generating form titles
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
 
 def _detect_file_type(file_bytes: bytes) -> str:
     # Very lightweight magic-bytes based detection
@@ -191,11 +198,101 @@ def ocr_extract_fields(file_bytes: bytes, key_hint: str) -> Dict[str, Any]:
         return fields
 
     fields = _infer_fields_from_text(text)
+    
+    # Extract title from document content
+    def _extract_title_from_text(t: str, filename: str) -> str:
+        """Extract meaningful title from document text"""
+        if not t or not t.strip():
+            # Fallback to filename without extension
+            return os.path.splitext(os.path.basename(filename))[0]
+        
+        # Get first non-empty line (likely the title/heading)
+        lines = [line.strip() for line in t.split('\n') if line.strip()]
+        if not lines:
+            return os.path.splitext(os.path.basename(filename))[0]
+        
+        # Use first line as title, but clean it up
+        title = lines[0]
+        
+        # If first line is too short, try combining first few words from multiple lines
+        if len(title) < 10 and len(lines) > 1:
+            # Combine first 2-3 lines up to reasonable length
+            combined = ' '.join(lines[:3])
+            if len(combined) <= 100:
+                title = combined
+        
+        # Clean up title
+        # Remove common form labels/prefixes
+        title = re.sub(r'^(form|biểu mẫu|mẫu|đơn|application|document)[\s:_-]+', '', title, flags=re.IGNORECASE)
+        
+        # Limit length
+        if len(title) > 100:
+            title = title[:97] + '...'
+        
+        # If title is still too generic or empty, try using OpenAI
+        if not title.strip() or len(title.strip()) < 3:
+            openai_title = _generate_title_with_openai(t)
+            if openai_title:
+                return openai_title
+            # Final fallback to filename
+            return os.path.splitext(os.path.basename(filename))[0]
+        
+        return title.strip()
+    
+    def _generate_title_with_openai(content: str) -> str:
+        """Use OpenAI to generate a meaningful title from document content"""
+        if not OPENAI_AVAILABLE:
+            return ""
+        
+        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if not api_key:
+            return ""
+        
+        try:
+            client = OpenAI(api_key=api_key)
+            
+            # Use first 1000 chars of content to avoid token limits
+            content_sample = content[:1000] if len(content) > 1000 else content
+            
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Bạn là trợ lý tạo tên biểu mẫu. Dựa trên nội dung văn bản, hãy tạo một tên ngắn gọn, rõ ràng cho biểu mẫu (tối đa 100 ký tự). Chỉ trả về tên biểu mẫu, không giải thích thêm."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Tạo tên cho biểu mẫu này:\n\n{content_sample}"
+                    }
+                ],
+                temperature=0.3,
+                max_tokens=100
+            )
+            
+            if not response.choices or not response.choices[0].message.content:
+                return ""
+            
+            title = response.choices[0].message.content.strip()
+            # Remove quotes if OpenAI wrapped the title
+            title = title.strip('"').strip("'")
+            
+            if len(title) > 100:
+                title = title[:97] + '...'
+            
+            return title
+            
+        except Exception as e:
+            print(f"[ocr] OpenAI title generation failed: {e}")
+            return ""
+    
+    extracted_title = _extract_title_from_text(text, key_hint)
 
     return {
         "fields": fields,
         "pages": pages,
         "text_sample": text[:500],
+        "extracted_title": extracted_title,  # Add extracted title
     }
 
 

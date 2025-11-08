@@ -91,14 +91,18 @@ def run_once():
     content = obj["Body"].read()
 
     schema = ocr_extract_fields(content, event["key"])  # minimal extraction
+    
+    # Use extracted title if available, otherwise fallback to filename
+    title = schema.get("extracted_title") or os.path.basename(event["key"])
+    
     schema.update({
         "id": event["key"],
-        "title": os.path.basename(event["key"]) or event["key"],
+        "title": title,
         "source": {"bucket": event["bucket"], "key": event["key"]},
         "createdAt": int(time.time())
     })
     db.forms.update_one({"id": schema["id"]}, {"$set": schema}, upsert=True)
-    print(f"[worker] Upserted form schema: {schema['id']}")
+    print(f"[worker] Upserted form schema: {schema['id']}, title: {title}")
 
     sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt)
     print("[worker] Deleted SQS message")
