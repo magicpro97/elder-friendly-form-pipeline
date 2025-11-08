@@ -104,7 +104,53 @@ except:
 ### Git Staging Rules
 **CRITICAL: Always check changed files before committing!**
 
-**Before EVERY commit:**
+**Development Workflow (Build → Test → Commit → Push):**
+
+**1. Make code changes**
+```bash
+# Edit files as needed
+vim api/app/main.py frontend/pages/forms/[id].tsx
+```
+
+**2. Build affected services**
+```bash
+# Build only changed services
+docker compose build api frontend worker
+
+# Or rebuild all if uncertain
+docker compose build
+```
+
+**3. Restart services**
+```bash
+# Restart specific services
+docker compose restart api frontend worker
+
+# Check logs for errors
+docker compose logs api --tail=30
+docker compose logs frontend --tail=30
+```
+
+**4. Test functionality**
+```bash
+# Health check
+curl http://localhost:8000/healthz
+
+# Test specific endpoints
+curl -X POST http://localhost:8000/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"formId": "raw/test.docx"}'
+
+# For complex flows, write test script
+cat > /tmp/test_feature.sh << 'EOF'
+#!/bin/bash
+# Test validation, form filling, etc.
+EOF
+chmod +x /tmp/test_feature.sh
+/tmp/test_feature.sh
+```
+
+**5. Stage and commit (after successful testing)**
 ```bash
 # 1. Review ALL changed files
 git status
@@ -114,13 +160,20 @@ git diff
 git reset
 
 # 3. Stage ONLY essential files explicitly
-git add api/app/main.py api/test_ux_improvements.py
+git add api/app/main.py frontend/pages/forms/[id].tsx
 
 # 4. Verify what's staged
 git status
 
-# 5. Only then commit
-git commit -m "feat: improve UX with friendly Vietnamese questions"
+# 5. Commit with descriptive message
+git commit -m "feat: add feature X with Y improvement
+
+- Detail 1
+- Detail 2
+- Tested: scenario A → result B"
+
+# 6. Push to remote
+git push origin khang
 ```
 
 **Only stage essential files**:
@@ -138,6 +191,42 @@ git commit -m "feat: improve UX with friendly Vietnamese questions"
 - ❌ `*.log` - Log files
 - ❌ Binary files unless absolutely necessary
 
+**Testing Examples:**
+
+**API Validation Testing:**
+```bash
+# Test OpenAI answer validation
+SESSION_ID=$(curl -s -X POST http://localhost:8000/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"formId": "raw/form.docx"}' | jq -r '.sessionId')
+
+# Test invalid answer (should reject)
+curl -s -X POST "http://localhost:8000/sessions/$SESSION_ID/next-question" \
+  -H "Content-Type: application/json" \
+  -d '{"lastAnswer": {"fieldId": "phone", "value": "abc"}}' | jq '.validation'
+
+# Expected: {"isValid": false, "message": "...", "needsConfirmation": false}
+
+# Test valid answer (should accept)
+curl -s -X POST "http://localhost:8000/sessions/$SESSION_ID/next-question" \
+  -H "Content-Type: application/json" \
+  -d '{"lastAnswer": {"fieldId": "phone", "value": "0901234567"}}' | jq '.validation'
+
+# Expected: {"isValid": true, "message": "", "needsConfirmation": false}
+```
+
+**Frontend UI Testing:**
+```bash
+# Open browser to test
+open http://localhost:3000
+
+# Verify:
+# - Form titles display correctly (not filenames)
+# - Warning messages show yellow background
+# - Error messages show red background
+# - Vietnamese text renders properly
+```
+
 ## Integration Points
 
 ### OpenAI API
@@ -146,6 +235,21 @@ git commit -m "feat: improve UX with friendly Vietnamese questions"
 - Response format: `{"type": "json_object"}` for structured output
 - System prompt emphasizes **conversational Vietnamese**, not raw labels
 - Retry logic: catches exceptions, falls back to template-based questions
+
+`_validate_answer_with_openai()` in `api/app/main.py`:
+- Validates answer relevance to question using GPT-4o-mini
+- Returns `ValidationResponse` with 3 states:
+  * `isValid: false` → Reject answer, show error, ask again
+  * `isValid: true, needsConfirmation: true` → Accept with warning
+  * `isValid: true, needsConfirmation: false` → Fully valid
+- Examples:
+  * Phone "abc" → invalid, "090123" → needs confirmation, "0901234567" → valid
+  * Email "abc" → invalid, "test@email.com" → valid
+
+`_extract_title_from_text()` in `worker/app/ocr.py`:
+- Extracts meaningful form titles from document content
+- Falls back to OpenAI `_generate_title_with_openai()` if first line too short
+- Result: "Đơn xin việc" instead of "topcv-1762617188.docx"
 
 ### S3 → SQS → Worker Pipeline
 1. Crawler uploads to `s3://FORMS_BUCKET/raw/topcv-{timestamp}.docx`
@@ -156,15 +260,18 @@ git commit -m "feat: improve UX with friendly Vietnamese questions"
 ### Frontend → API Communication
 Next.js uses `axios` with `NEXT_PUBLIC_API_BASE_URL`:
 - `/sessions` POST: Start new form session
-- `/sessions/{id}/next-question` POST: Submit answer, get next question
+- `/sessions/{id}/next-question` POST: Submit answer, get next question with validation
+  * Response includes `validation` field with `isValid`, `message`, `needsConfirmation`
+  * Frontend handles 4 message types: `bot`, `user`, `warning` (yellow), `error` (red)
 - `/sessions/{id}/fill` POST: Generate PDF with all answers
 - Chat UI in `pages/forms/[id].tsx` stores messages in React state, scrolls to bottom automatically
 
 ## Key Files Reference
-- `api/app/main.py`: Core FastAPI app, UX question generation, PDF overlay
+- `api/app/main.py`: Core FastAPI app, UX question generation, answer validation, PDF overlay
 - `api/app/gold_aggregator.py`: Analytics aggregation (completion rates, field popularity)
-- `worker/app/main.py`: SQS consumer, OCR orchestration
-- `frontend/pages/forms/[id].tsx`: Conversational chat UI with Vietnamese support
+- `worker/app/main.py`: SQS consumer, OCR orchestration, form title extraction
+- `worker/app/ocr.py`: Multi-format OCR (PDF/DOCX/DOC/images), title extraction with OpenAI fallback
+- `frontend/pages/forms/[id].tsx`: Conversational chat UI with Vietnamese support, validation message display
 - `e2e-tests/playwright.config.ts`: Multi-browser E2E test config (Chromium, Firefox, WebKit, Mobile)
 - `docker-compose.yml`: Full stack with hot-reload, LocalStack for dev
 
