@@ -12,7 +12,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/10/10-mau-don-xin-thong-tin-dat-dai.doc",
     "original_file_path": "forms/original_files/mau_don_xin_thong_tin_dat_dai/original.doc",
     "file_extension": ".doc",
-    "processed_at": "2025-11-07T02:42:58.909314",
+    "processed_at": "2025-11-08T02:41:54.203093",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -85,7 +85,7 @@
       "label": "fax",
       "type": "string",
       "required": false,
-      "example": "0281234567"
+      "example": "02812345678"
     },
     {
       "name": "email",
@@ -109,7 +109,7 @@
       "example": "Để thực hiện dự án xây dựng"
     },
     {
-      "name": "data_access_method",
+      "name": "data_extraction_method",
       "label": "Hình thức khai thác, sử dụng và phương thức nhận kết quả",
       "type": "string",
       "required": true,

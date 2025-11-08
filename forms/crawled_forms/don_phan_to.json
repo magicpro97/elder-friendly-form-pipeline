@@ -11,7 +11,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2015/09/mau-don-phan-to-co-huong-dan-cach-viet-don.docx",
     "original_file_path": "forms/original_files/don_phan_to/original.docx",
     "file_extension": ".docx",
-    "processed_at": "2025-11-07T02:42:42.785819",
+    "processed_at": "2025-11-08T02:41:38.315719",
     "ocr_confidence": 1.0,
     "ocr_method": "docx",
     "ocr_keywords": [
@@ -63,7 +63,7 @@
       "label": "Địa chỉ",
       "type": "address",
       "required": true,
-      "example": "123 Đường ABC, Quận 1, TP.HCM"
+      "example": "Số 1, Đường ABC, Quận 1, TP. HCM"
     },
     {
       "name": "phone",
@@ -77,56 +77,42 @@
       "label": "Email",
       "type": "email",
       "required": false,
-      "example": "example@gmail.com"
+      "example": "example@mail.com"
     },
     {
       "name": "case_number",
       "label": "Vụ án",
       "type": "string",
       "required": true,
-      "example": "Vụ án số 123/2023"
+      "example": "Vụ án dân sự số 123"
     },
     {
       "name": "plaintiff_name",
       "label": "Nguyên đơn",
       "type": "string",
       "required": true,
-      "example": "Ông/Bà Trần Văn B"
+      "example": "Trần Thị B"
     },
     {
-      "name": "dispute_summary",
+      "name": "content",
       "label": "NỘI DUNG PHẢN TỐ",
       "type": "multiline",
       "required": true,
-      "example": "Tóm tắt sự việc dẫn tới tranh chấp..."
+      "example": "Trình bày tóm tắt lại diễn biến sự việc dẫn tới tranh chấp"
     },
     {
-      "name": "request_1",
-      "label": "Thứ nhất",
-      "type": "string",
+      "name": "request",
+      "label": "YÊU CẦU PHẢN TỐ",
+      "type": "multiline",
       "required": true,
-      "example": "Yêu cầu bồi thường thiệt hại"
-    },
-    {
-      "name": "request_2",
-      "label": "Thứ hai",
-      "type": "string",
-      "required": false,
-      "example": "Yêu cầu xin lỗi công khai"
-    },
-    {
-      "name": "request_3",
-      "label": "Thứ ba",
-      "type": "string",
-      "required": false,
-      "example": "Yêu cầu khôi phục danh dự"
+      "example": "Đề nghị Quý Tòa án xem xét giải quyết những vấn đề sau"
     },
     {
       "name": "document_list",
       "label": "Danh mục tài liệu, chúng cứ kèm theo (nếu có)",
       "type": "multiline",
       "required": false,
-      "example": "Giấy tờ liên quan đến vụ án..."
+      "example": "Tài liệu 1, Tài liệu 2"
     }
   ]
 }
