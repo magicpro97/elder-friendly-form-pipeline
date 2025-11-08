@@ -159,6 +159,50 @@ export default function FormChat() {
     }
   }
 
+  const skipQuestion = async () => {
+    if (!sessionId || !question) return
+    
+    setLoading(true)
+    
+    // Add skip message
+    const newMessages = [...messages, { 
+      type: 'user' as const, 
+      text: '⏭️ Bỏ qua câu hỏi này' 
+    }]
+    setMessages(newMessages)
+    
+    try {
+      const nq = await axios.post(`${API_BASE}/sessions/${sessionId}/next-question`, {
+        lastAnswer: { fieldId: question.id, value: '' } // Empty value = skip
+      })
+      
+      setQuestion(nq.data.nextQuestion)
+      setDone(nq.data.done)
+      
+      if (nq.data.done) {
+        setMessages([...newMessages, {
+          type: 'bot',
+          text: 'Cảm ơn bạn! Bạn đã hoàn thành tất cả các câu hỏi. Bạn có muốn tải biểu mẫu đã điền không?',
+        }])
+      } else if (nq.data.nextQuestion) {
+        setMessages([...newMessages, {
+          type: 'bot',
+          text: nq.data.nextQuestion.text,
+          fieldId: nq.data.nextQuestion.id,
+        }])
+      }
+    } catch (error) {
+      console.error('Error skipping question:', error)
+      setMessages([...newMessages, {
+        type: 'bot',
+        text: 'Có lỗi xảy ra. Vui lòng thử lại.',
+      }])
+    } finally {
+      setLoading(false)
+      inputRef.current?.focus()
+    }
+  }
+
   const finish = async () => {
     if (!sessionId) return
     setLoading(true)
@@ -319,6 +363,18 @@ export default function FormChat() {
       opacity: 0.5,
       cursor: 'not-allowed',
     },
+    skipButton: {
+      background: '#ffca28',
+      border: 'none',
+      color: '#333',
+      borderRadius: '24px',
+      padding: '1rem',
+      cursor: 'pointer',
+      fontSize: '1.2rem',
+      transition: 'all 0.2s',
+      boxShadow: '0 2px 8px rgba(255, 202, 40, 0.3)',
+      minWidth: '56px',
+    },
     downloadButton: {
       background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
       border: 'none',
@@ -460,6 +516,24 @@ export default function FormChat() {
                 e.currentTarget.style.borderColor = '#e9ecef'
               }}
             />
+            <button
+              style={styles.skipButton}
+              onClick={skipQuestion}
+              disabled={loading}
+              title="Bỏ qua câu hỏi này"
+              onMouseEnter={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.background = '#ffc107'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#ffca28'
+                e.currentTarget.style.transform = ''
+              }}
+            >
+              ⏭️
+            </button>
             <button
               style={{
                 ...styles.sendButton,

@@ -196,14 +196,11 @@ async def _validate_answer_with_openai(question: str, answer: Any, field_type: s
     if client is None:
         return ValidationResponse(isValid=True, needsConfirmation=False)
     
-    # Basic validation first (empty, too short, etc.)
+    # Basic validation - empty answers should be handled by skip logic, not here
     answer_str = str(answer).strip()
     if not answer_str or len(answer_str) < 1:
-        return ValidationResponse(
-            isValid=False,
-            message="Câu trả lời không được để trống",
-            needsConfirmation=False
-        )
+        # Empty answer - let it pass through, will be handled as skip
+        return ValidationResponse(isValid=True, needsConfirmation=False)
     
     try:
         system_prompt = """Bạn là trợ lý kiểm tra độ phù hợp của câu trả lời với câu hỏi trong biểu mẫu.
@@ -263,9 +260,11 @@ Kiểm tra câu trả lời có hợp lệ không?"""
         return ValidationResponse(isValid=True, needsConfirmation=False)
 
 
-async def generate_next_question(form_schema: Dict[str, Any], answers: Dict[str, Any]) -> NextQuestionResponse:
+async def generate_next_question(form_schema: Dict[str, Any], answers: Dict[str, Any], skipped: List[str] = []) -> NextQuestionResponse:
     # If no OpenAI key, fallback to deterministic next unanswered field
-    unanswered = [f for f in form_schema.get("fields", []) if f.get("id") not in answers]
+    # Skip fields that are already answered OR explicitly skipped
+    answered_or_skipped = set(list(answers.keys()) + skipped)
+    unanswered = [f for f in form_schema.get("fields", []) if f.get("id") not in answered_or_skipped]
     if not unanswered:
         return NextQuestionResponse(done=True)
 
@@ -296,9 +295,11 @@ Make questions conversational, not just field labels."""
 Form title: {form_schema.get('title', 'Form')}
 All fields: {[{"id": f["id"], "label": f.get("label"), "type": f.get("type")} for f in form_schema.get("fields", [])]}
 Already answered: {list(answers.keys())}
+Skipped fields (don't ask again): {skipped}
 
 Generate a friendly, conversational Vietnamese question for the next unanswered field.
 Example: Instead of "Phone", ask "Bạn có thể cho tôi biết số điện thoại của bạn không?"
+IMPORTANT: Do NOT ask about fields that are already answered or skipped.
 """
     
     try:
@@ -403,9 +404,37 @@ async def next_question(session_id: str, payload: NextQuestionRequest, request: 
 
     validation_result = None
     
-    # Validate answer if provided
+    # Validate answer if provided (and not empty/skip)
     if payload.lastAnswer is not None:
-        # Find the field to get question text and type
+        answer_value = payload.lastAnswer.value
+        
+        # Check if user wants to skip (empty answer or special skip marker)
+        is_skip = not answer_value or str(answer_value).strip() == "" or str(answer_value).strip().lower() in ["skip", "bỏ qua"]
+        
+        if is_skip:
+            # User wants to skip this question - mark as skipped but don't save answer
+            skipped_list = session.get("skipped", [])
+            if payload.lastAnswer.fieldId not in skipped_list:
+                skipped_list.append(payload.lastAnswer.fieldId)
+            
+            updates = {
+                "skipped": skipped_list,
+                "lastActiveAt": int(__import__('time').time()),
+            }
+            await db.sessions.update_one(
+                {"_id": session.get("_id")},
+                {"$set": updates}
+            )
+            
+            # Move to next question (use updated skipped list)
+            resp = await generate_next_question(
+                form_schema=form, 
+                answers=session.get("answers", {}),
+                skipped=skipped_list
+            )
+            return resp
+        
+        # Not skipping, validate the answer
         field = next((f for f in form.get("fields", []) if f.get("id") == payload.lastAnswer.fieldId), None)
         
         if field:
@@ -416,21 +445,25 @@ async def next_question(session_id: str, payload: NextQuestionRequest, request: 
             # Validate the answer
             validation_result = await _validate_answer_with_openai(
                 question=question_text,
-                answer=payload.lastAnswer.value,
+                answer=answer_value,
                 field_type=field_type
             )
             
             # If validation failed completely, return error response with validation info
             if not validation_result.isValid:
                 # Don't save the answer, return validation error
-                resp = await generate_next_question(form_schema=form, answers=session.get("answers", {}))
+                resp = await generate_next_question(
+                    form_schema=form, 
+                    answers=session.get("answers", {}),
+                    skipped=session.get("skipped", [])
+                )
                 resp.validation = validation_result
                 return resp
             
             # If needs confirmation, return current state with validation warning
             if validation_result.needsConfirmation:
                 # Save the answer but ask for confirmation
-                session.setdefault("answers", {})[payload.lastAnswer.fieldId] = payload.lastAnswer.value
+                session.setdefault("answers", {})[payload.lastAnswer.fieldId] = answer_value
                 updates = {
                     "answers": session["answers"],
                     "lastActiveAt": int(__import__('time').time()),
@@ -440,12 +473,16 @@ async def next_question(session_id: str, payload: NextQuestionRequest, request: 
                     {"$set": updates, "$inc": {"answerCount": 1}}
                 )
                 # Return next question with validation warning
-                resp = await generate_next_question(form_schema=form, answers=session["answers"])
+                resp = await generate_next_question(
+                    form_schema=form, 
+                    answers=session["answers"],
+                    skipped=session.get("skipped", [])
+                )
                 resp.validation = validation_result
                 return resp
         
         # Answer is valid, save it
-        session.setdefault("answers", {})[payload.lastAnswer.fieldId] = payload.lastAnswer.value
+        session.setdefault("answers", {})[payload.lastAnswer.fieldId] = answer_value
         updates = {
             "answers": session["answers"],
             "lastActiveAt": int(__import__('time').time()),
@@ -455,7 +492,11 @@ async def next_question(session_id: str, payload: NextQuestionRequest, request: 
             {"$set": updates, "$inc": {"answerCount": 1}}
         )
 
-    resp = await generate_next_question(form_schema=form, answers=session["answers"])
+    resp = await generate_next_question(
+        form_schema=form, 
+        answers=session["answers"],
+        skipped=session.get("skipped", [])
+    )
     if validation_result:
         resp.validation = validation_result
     return resp
