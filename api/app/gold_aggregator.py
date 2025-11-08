@@ -1,5 +1,5 @@
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 
@@ -159,7 +159,7 @@ async def get_timeseries_data(db: AsyncIOMotorDatabase, days: int = 7) -> Dict[s
     }
 
 
-async def upsert_gold_data(db: AsyncIOMotorDatabase, form_id: str = None):
+async def upsert_gold_data(db: AsyncIOMotorDatabase, form_id: Optional[str] = None):
     """Upsert gold layer data for a form or all forms"""
     if form_id:
         stats = await aggregate_form_statistics(db, form_id)

@@ -279,6 +279,52 @@ import boto3
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+
+# Register Unicode font for Vietnamese support
+def _register_unicode_font():
+    """Register a Unicode-compatible font for Vietnamese text"""
+    import os
+    import glob
+    
+    # List of font paths to try (macOS, Linux, Windows)
+    font_candidates = [
+        # Linux (Debian/Ubuntu) - most common in Docker
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+        '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
+        '/usr/share/fonts/TTF/DejaVuSans.ttf',
+        # macOS
+        '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+        '/Library/Fonts/Arial Unicode.ttf',
+        '/System/Library/Fonts/STHeiti Light.ttc',
+        '/System/Library/Fonts/PingFang.ttc',
+        # Windows
+        'C:/Windows/Fonts/Arial.ttf',
+        'C:/Windows/Fonts/arialuni.ttf',
+    ]
+    
+    # Try each font
+    for font_path in font_candidates:
+        if os.path.exists(font_path):
+            try:
+                font_name = 'UnicodeFont'
+                pdfmetrics.registerFont(TTFont(font_name, font_path))
+                print(f"✅ Registered font: {font_path}")
+                return font_name
+            except Exception as e:
+                print(f"⚠️  Failed to register {font_path}: {e}")
+                continue
+    
+    # Ultimate fallback: use Helvetica
+    print("⚠️  No Unicode font found, using Helvetica (Vietnamese may show as boxes)")
+    return 'Helvetica'
+
+
+# Try to register Unicode font at startup
+UNICODE_FONT = _register_unicode_font()
 
 
 def _detect_file_type(file_bytes: bytes) -> str:
@@ -292,29 +338,107 @@ def _detect_file_type(file_bytes: bytes) -> str:
     return 'unknown'
 
 
-def overlay_pdf(base_pdf_bytes: bytes, annotations: Dict[str, Any]) -> bytes:
-    """Overlay annotations on PDF"""
+def overlay_pdf(base_pdf_bytes: bytes, annotations: Dict[str, Any], form_schema: Optional[Dict[str, Any]] = None) -> bytes:
+    """Overlay annotations on PDF with smart positioning"""
     try:
-        packet = BytesIO()
-        can = canvas.Canvas(packet, pagesize=letter)
-        # naive placement: if schema has bbox, respect it; else write top-left
-        y_start = 720
-        y_offset = 20
-        for idx, (field_id, value) in enumerate(annotations.items()):
-            # default position with spacing
-            x, y = 72, y_start - (idx * y_offset)
-            can.drawString(x, y, f"{field_id}: {value}")
-        can.save()
-        packet.seek(0)
-
-        overlay_reader = PdfReader(packet)
         base_reader = PdfReader(BytesIO(base_pdf_bytes))
         writer = PdfWriter()
+        
+        # Get page dimensions from first page
+        first_page = base_reader.pages[0]
+        page_width = float(first_page.mediabox.width)
+        page_height = float(first_page.mediabox.height)
+        
+        # Create field position mapping from schema
+        field_positions = {}
+        if form_schema:
+            for field in form_schema.get("fields", []):
+                field_id = field.get("id")
+                bbox = field.get("bbox")
+                page_num = field.get("page", 1)
+                if field_id and bbox:
+                    field_positions[field_id] = {
+                        "bbox": bbox,
+                        "page": page_num
+                    }
+        
+        # Create overlay for each page
+        pages_with_overlays = {}
+        
+        for field_id, value in annotations.items():
+            # Get field position if available
+            if field_id in field_positions:
+                pos = field_positions[field_id]
+                page_num = pos["page"]
+                bbox = pos["bbox"]  # [x, y, width, height]
+                x, y = bbox[0], bbox[1]
+            else:
+                # Smart fallback: distribute fields vertically on first page
+                page_num = 1
+                idx = list(annotations.keys()).index(field_id)
+                # Position from top with better spacing
+                margin = 50
+                y_start = page_height - margin - 60  # Leave space for header
+                y_offset = 30  # Better spacing
+                x = margin
+                y = y_start - (idx * y_offset)
+            
+            # Ensure page overlay exists
+            if page_num not in pages_with_overlays:
+                pages_with_overlays[page_num] = BytesIO()
+                pages_with_overlays[page_num].canvas = canvas.Canvas(
+                    pages_with_overlays[page_num], 
+                    pagesize=(page_width, page_height)
+                )
+            
+            can = pages_with_overlays[page_num].canvas
+            
+            # Format value based on type (remove field_id prefix for cleaner output)
+            display_value = str(value) if value else ""
+            
+            # Set font with Vietnamese support
+            can.setFont(UNICODE_FONT, 10)
+            
+            # Word wrap for long text
+            max_width = page_width - x - 50
+            if can.stringWidth(display_value, UNICODE_FONT, 10) > max_width:
+                # Simple word wrap
+                words = display_value.split()
+                lines = []
+                current_line = ""
+                for word in words:
+                    test_line = current_line + " " + word if current_line else word
+                    if can.stringWidth(test_line, UNICODE_FONT, 10) <= max_width:
+                        current_line = test_line
+                    else:
+                        if current_line:
+                            lines.append(current_line)
+                        current_line = word
+                if current_line:
+                    lines.append(current_line)
+                
+                # Draw wrapped lines
+                for i, line in enumerate(lines):
+                    can.drawString(x, y - (i * 12), line)
+            else:
+                # Draw single line
+                can.drawString(x, y, display_value)
+        
+        # Finalize all overlays
+        for page_num, overlay_io in pages_with_overlays.items():
+            overlay_io.canvas.save()
+            overlay_io.seek(0)
+        
+        # Merge overlays with base PDF pages
         for i, page in enumerate(base_reader.pages):
-            page_to_merge = overlay_reader.pages[0] if len(overlay_reader.pages) > 0 else None
-            if page_to_merge:
-                page.merge_page(page_to_merge)
+            page_num = i + 1
+            if page_num in pages_with_overlays:
+                overlay_reader = PdfReader(pages_with_overlays[page_num])
+                if len(overlay_reader.pages) > 0:
+                    page.merge_page(overlay_reader.pages[0])
             writer.add_page(page)
+        
+        # Write output
         out_stream = BytesIO()
         writer.write(out_stream)
         out_stream.seek(0)
@@ -329,10 +453,10 @@ def create_pdf_from_answers(answers: Dict[str, Any]) -> bytes:
     packet = BytesIO()
     can = canvas.Canvas(packet, pagesize=letter)
     
-    # Title
-    can.setFont("Helvetica-Bold", 16)
+    # Title with Vietnamese support
+    can.setFont(UNICODE_FONT, 16)
     can.drawString(72, 750, "Biểu mẫu đã điền")
-    can.setFont("Helvetica", 12)
+    can.setFont(UNICODE_FONT, 12)
     
     # Answers
     y_start = 700
@@ -341,6 +465,7 @@ def create_pdf_from_answers(answers: Dict[str, Any]) -> bytes:
         y = y_start - (idx * y_offset)
         if y < 50:  # New page if needed
             can.showPage()
+            can.setFont(UNICODE_FONT, 12)
             y = 750 - (idx * y_offset)
         can.drawString(72, y, f"{field_id}: {str(value)}")
     
@@ -390,7 +515,7 @@ async def fill_pdf(session_id: str, payload: FillRequest, db=Depends(get_db)):
     
     if file_type == 'pdf':
         try:
-            filled = overlay_pdf(file_bytes, answers)
+            filled = overlay_pdf(file_bytes, answers, form)
             return StreamingResponse(BytesIO(filled), media_type="application/pdf")
         except Exception as e:
             # If PDF overlay fails, create new PDF
