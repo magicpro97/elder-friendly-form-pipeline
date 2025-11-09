@@ -1,11 +1,21 @@
+import json
 import os
+from io import BytesIO
 from typing import Any, Dict, List, Optional
 
+import boto3
 from bson import ObjectId
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
+from openai import OpenAI  # type: ignore
 from pydantic import BaseModel, Field
+from pypdf import PdfReader, PdfWriter
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/forms")
 API_PORT = int(os.getenv("API_PORT", "8000"))
@@ -145,7 +155,6 @@ async def refresh_gold_data(form_id: Optional[str] = None, db=Depends(get_db)):
 
 
 # Minimal OpenAI integration (JSON response) — logic placed inline for MVP
-from openai import OpenAI  # type: ignore
 
 
 def _openai_client() -> Optional[OpenAI]:
@@ -210,6 +219,105 @@ def _make_friendly_question(field: Dict[str, Any]) -> str:
             return templates[field_type]
         else:
             return f"Vui lòng cung cấp thông tin về {label.lower()}"
+
+
+async def _parse_compound_answer(field: Dict[str, Any], answer: str) -> Dict[str, Any]:
+    """
+    Parse free-form answer for compound fields (CCCD, address, etc.)
+    Returns dict with parsed values and missing subfields.
+
+    Example:
+    - Input: "001234567890 cấp ngày 15/05/2020 tại Hà Nội"
+    - Output: {
+        "parsed": {"so": "001234567890", "cap_ngay": "15/05/2020", "cap_tai": "Hà Nội"},
+        "missing": [],
+        "needs_clarification": False
+      }
+    """
+    client = _openai_client()
+
+    # Fallback if no OpenAI: just store as single text value
+    if client is None:
+        return {
+            "parsed": {field.get("id"): answer},
+            "missing": [],
+            "needs_clarification": False,
+        }
+
+    subfields = field.get("subfields", [])
+    if not subfields:
+        return {
+            "parsed": {field.get("id"): answer},
+            "missing": [],
+            "needs_clarification": False,
+        }
+
+    # Build prompt to parse answer into subfields
+    subfield_descriptions = [
+        f"- {sf['id']}: {sf.get('prompt', sf.get('label', ''))}" for sf in subfields
+    ]
+    subfield_list = "\n".join(subfield_descriptions)
+
+    system_prompt = """Bạn là trợ lý phân tích câu trả lời cho các trường thông tin nhóm (compound fields).
+Nhiệm vụ: Trích xuất thông tin từ câu trả lời tự do của người dùng và phân loại vào các trường con.
+
+Trả về JSON với format:
+{
+  "parsed": {
+    "subfield_id_1": "giá trị",
+    "subfield_id_2": "giá trị",
+    ...
+  },
+  "missing": ["subfield_id của các trường thiếu"],
+  "needs_clarification": true/false (nếu câu trả lời không rõ ràng)
+}
+
+Lưu ý:
+- Nếu người dùng chỉ cung cấp 1 phần thông tin, trích xuất phần đó và đánh dấu các phần còn lại là missing
+- Nếu câu trả lời mơ hồ, set needs_clarification=true
+- Trả về null cho các trường không có trong câu trả lời"""
+
+    user_prompt = f"""Trường thông tin: {field.get('label')}
+
+Các trường con cần trích xuất:
+{subfield_list}
+
+Câu trả lời của người dùng: {answer}
+
+Hãy phân tích và trích xuất thông tin."""
+
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.3,
+        )
+
+        content = response.choices[0].message.content or "{}"
+        result = json.loads(content)
+
+        # Validate result structure
+        if not isinstance(result.get("parsed"), dict):
+            result["parsed"] = {}
+        if not isinstance(result.get("missing"), list):
+            result["missing"] = [sf["id"] for sf in subfields]
+        if "needs_clarification" not in result:
+            result["needs_clarification"] = False
+
+        return result
+
+    except Exception as e:
+        print(f"[compound_parse] OpenAI parse error: {e}")
+        # Fallback: store as single value, mark all subfields as missing
+        return {
+            "parsed": {field.get("id"): answer},
+            "missing": [sf["id"] for sf in subfields],
+            "needs_clarification": True,
+        }
 
 
 async def _validate_answer_with_openai(
@@ -492,6 +600,70 @@ async def next_question(
             question_text = _make_friendly_question(field)
             field_type = field.get("type", "text")
 
+            # Handle compound fields differently
+            if field_type == "compound":
+                # Parse free-form answer into subfields
+                parse_result = await _parse_compound_answer(field, answer_value)
+
+                # Check if any critical info is missing
+                if parse_result["missing"] or parse_result["needs_clarification"]:
+                    # Build clarification message
+                    missing_prompts = []
+                    subfields = field.get("subfields", [])
+                    for missing_id in parse_result["missing"]:
+                        sf = next((s for s in subfields if s["id"] == missing_id), None)
+                        if sf:
+                            missing_prompts.append(sf.get("prompt", sf.get("label")))
+
+                    if missing_prompts:
+                        clarification_msg = (
+                            f"Bạn chưa cung cấp: {', '.join(missing_prompts)}. "
+                            "Vui lòng cung cấp đầy đủ thông tin."
+                        )
+                    else:
+                        clarification_msg = (
+                            "Thông tin bạn cung cấp chưa rõ ràng. "
+                            "Vui lòng cung cấp lại đầy đủ hơn."
+                        )
+
+                    # Return validation error asking for complete info
+                    validation_result = ValidationResponse(
+                        isValid=False,
+                        message=clarification_msg,
+                        needsConfirmation=False,
+                    )
+                    resp = await generate_next_question(
+                        form_schema=form,
+                        answers=session.get("answers", {}),
+                        skipped=session.get("skipped", []),
+                    )
+                    resp.validation = validation_result
+                    return resp
+
+                # All subfields parsed successfully - save as structured data
+                # Store with compound field ID + subfield structure
+                parsed_data = parse_result["parsed"]
+                session.setdefault("answers", {})[
+                    payload.lastAnswer.fieldId
+                ] = parsed_data
+                updates = {
+                    "answers": session["answers"],
+                    "lastActiveAt": int(__import__("time").time()),
+                }
+                await db.sessions.update_one(
+                    {"_id": session.get("_id")},
+                    {"$set": updates, "$inc": {"answerCount": 1}},
+                )
+
+                # Move to next question
+                resp = await generate_next_question(
+                    form_schema=form,
+                    answers=session["answers"],
+                    skipped=session.get("skipped", []),
+                )
+                return resp
+
+            # Regular field - validate normally
             # Validate the answer
             validation_result = await _validate_answer_with_openai(
                 question=question_text, answer=answer_value, field_type=field_type
@@ -550,23 +722,11 @@ async def next_question(
 
 
 # Minimal fill implementation (overlay stub)
-from io import BytesIO
-
-import boto3
-from fastapi.responses import StreamingResponse
-from pypdf import PdfReader, PdfWriter
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfgen import canvas
 
 
 # Register Unicode font for Vietnamese support
 def _register_unicode_font():
     """Register a Unicode-compatible font for Vietnamese text"""
-    import glob
-    import os
-
     # List of font paths to try (macOS, Linux, Windows)
     font_candidates = [
         # Linux (Debian/Ubuntu) - most common in Docker
@@ -721,7 +881,7 @@ def overlay_pdf(
         writer.write(out_stream)
         out_stream.seek(0)
         return out_stream.read()
-    except Exception as e:
+    except Exception:
         # If PDF overlay fails, create a new PDF with answers
         return create_pdf_from_answers(annotations)
 
@@ -795,7 +955,7 @@ async def fill_pdf(session_id: str, payload: FillRequest, db=Depends(get_db)):
         try:
             filled = overlay_pdf(file_bytes, answers, form)
             return StreamingResponse(BytesIO(filled), media_type="application/pdf")
-        except Exception as e:
+        except Exception:
             # If PDF overlay fails, create new PDF
             filled = create_pdf_from_answers(answers)
             return StreamingResponse(BytesIO(filled), media_type="application/pdf")

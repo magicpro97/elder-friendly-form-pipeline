@@ -39,7 +39,7 @@ repos:
     rev: 7.0.0
     hooks:
       - id: flake8
-        args: [--max-line-length=120, --extend-ignore=E203,W503]
+        args: [--max-line-length=120, --extend-ignore=E203]
         files: ^(api|worker|crawler)/.*\.py$
 
   # TypeScript/JavaScript formatting with prettier
