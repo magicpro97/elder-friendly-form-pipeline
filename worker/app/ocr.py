@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import re
 import zipfile
@@ -15,6 +16,8 @@ try:
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 
 def _detect_file_type(file_bytes: bytes) -> str:
@@ -401,25 +404,50 @@ def ocr_extract_fields(file_bytes: bytes, key_hint: str) -> Dict[str, Any]:
 
     # Extract title from document content
     def _extract_title_from_text(t: str, filename: str) -> str:
-        """Extract meaningful title from document text"""
+        """Extract meaningful title from document text using OpenAI for Vietnamese forms"""
         if not t or not t.strip():
             # Fallback to filename without extension
             return os.path.splitext(os.path.basename(filename))[0]
 
-        # Get first non-empty line (likely the title/heading)
+        # For Vietnamese text, use OpenAI directly for better quality
+        # Detect Vietnamese characters (À-ỹ range covers Vietnamese diacritics)
+        if re.search(r"[\u00C0-\u1EF9]", t):
+            openai_title = _generate_title_with_openai(t)
+            if openai_title:
+                logger.info(f"Generated title with OpenAI: {openai_title}")
+                return openai_title
+            logger.warning(
+                "OpenAI title generation failed, falling back to text extraction"
+            )
+
+        # Fallback: Extract from text (for non-Vietnamese or if OpenAI fails)
         lines = [line.strip() for line in t.split("\n") if line.strip()]
         if not lines:
             return os.path.splitext(os.path.basename(filename))[0]
 
-        # Use first line as title, but clean it up
-        title = lines[0]
+        # Skip common Vietnamese government headers
+        skip_patterns = [
+            r"^CỘNG\s+H[ÒO]A",  # CỘNG HÒA / CỘNG HOA
+            r"^Độc\s+lập",  # Độc lập - Tự do - Hạnh phúc
+            r"^[0-9]+\s+[0-9/\-TT]+",  # Decree numbers like "9 15/2023/TT-BKHCN"
+            r"^[0-9]{10,}",  # Long number sequences
+        ]
 
-        # If first line is too short, try combining first few words from multiple lines
-        if len(title) < 10 and len(lines) > 1:
-            # Combine first 2-3 lines up to reasonable length
-            combined = " ".join(lines[:3])
-            if len(combined) <= 100:
-                title = combined
+        filtered_lines = []
+        for line in lines:
+            # Check if line matches any skip pattern
+            should_skip = any(
+                re.match(pattern, line, re.IGNORECASE) for pattern in skip_patterns
+            )
+            if not should_skip:
+                filtered_lines.append(line)
+
+        # Use first non-skipped line as title
+        if filtered_lines:
+            title = filtered_lines[0]
+        else:
+            # If all lines were filtered, use first line anyway
+            title = lines[0]
 
         # Clean up title
         # Remove common form labels/prefixes
@@ -434,23 +462,21 @@ def ocr_extract_fields(file_bytes: bytes, key_hint: str) -> Dict[str, Any]:
         if len(title) > 100:
             title = title[:97] + "..."
 
-        # If title is still too generic or empty, try using OpenAI
-        if not title.strip() or len(title.strip()) < 3:
-            openai_title = _generate_title_with_openai(t)
-            if openai_title:
-                return openai_title
-            # Final fallback to filename
-            return os.path.splitext(os.path.basename(filename))[0]
-
-        return title.strip()
+        return (
+            title.strip()
+            if title.strip()
+            else os.path.splitext(os.path.basename(filename))[0]
+        )
 
     def _generate_title_with_openai(content: str) -> str:
         """Use OpenAI to generate a meaningful title from document content"""
         if not OPENAI_AVAILABLE:
+            logger.warning("OpenAI library not available")
             return ""
 
         api_key = os.environ.get("OPENAI_API_KEY", "").strip()
         if not api_key:
+            logger.warning("OPENAI_API_KEY not set")
             return ""
 
         try:
@@ -480,6 +506,7 @@ def ocr_extract_fields(file_bytes: bytes, key_hint: str) -> Dict[str, Any]:
             )
 
             if not response.choices or not response.choices[0].message.content:
+                logger.warning("OpenAI returned empty response")
                 return ""
 
             title = response.choices[0].message.content.strip()
@@ -492,7 +519,7 @@ def ocr_extract_fields(file_bytes: bytes, key_hint: str) -> Dict[str, Any]:
             return title
 
         except Exception as e:
-            print(f"[ocr] OpenAI title generation failed: {e}")
+            logger.error(f"OpenAI title generation exception: {e}", exc_info=True)
             return ""
 
     extracted_title = _extract_title_from_text(text, key_hint)
