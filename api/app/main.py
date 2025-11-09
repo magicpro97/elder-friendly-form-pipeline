@@ -1,12 +1,11 @@
 import os
 from typing import Any, Dict, List, Optional
+
 from bson import ObjectId
-
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 from motor.motor_asyncio import AsyncIOMotorClient
-
+from pydantic import BaseModel, Field
 
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/forms")
 API_PORT = int(os.getenv("API_PORT", "8000"))
@@ -64,7 +63,11 @@ class FillRequest(BaseModel):
 async def get_db():
     client = AsyncIOMotorClient(MONGODB_URI)
     try:
-        db = client.get_default_database() if "/" in MONGODB_URI.split("mongodb://")[-1] else client["forms"]
+        db = (
+            client.get_default_database()
+            if "/" in MONGODB_URI.split("mongodb://")[-1]
+            else client["forms"]
+        )
         yield db
     finally:
         client.close()
@@ -94,17 +97,17 @@ async def get_form(form_id: str, db=Depends(get_db)):
 # Gold layer endpoints
 try:
     from .gold_aggregator import (
-        aggregate_form_statistics,
         aggregate_all_forms_statistics,
+        aggregate_form_statistics,
         get_timeseries_data,
-        upsert_gold_data
+        upsert_gold_data,
     )
 except ImportError:
     from gold_aggregator import (
-        aggregate_form_statistics,
         aggregate_all_forms_statistics,
+        aggregate_form_statistics,
         get_timeseries_data,
-        upsert_gold_data
+        upsert_gold_data,
     )
 
 
@@ -135,7 +138,10 @@ async def get_gold_timeseries(days: int = 7, db=Depends(get_db)):
 async def refresh_gold_data(form_id: Optional[str] = None, db=Depends(get_db)):
     """Refresh gold layer data"""
     await upsert_gold_data(db, form_id)
-    return {"status": "success", "message": f"Gold data refreshed for {form_id or 'all forms'}"}
+    return {
+        "status": "success",
+        "message": f"Gold data refreshed for {form_id or 'all forms'}",
+    }
 
 
 # Minimal OpenAI integration (JSON response) — logic placed inline for MVP
@@ -154,7 +160,23 @@ def _make_friendly_question(field: Dict[str, Any]) -> str:
     field_id = field.get("id", "")
     label = field.get("label", field_id)
     field_type = field.get("type", "text")
-    
+
+    # Handle compound fields (CCCD, address, etc.)
+    if field_type == "compound":
+        subfields = field.get("subfields", [])
+        if not subfields:
+            return f"Vui lòng cung cấp thông tin về {label.lower()}"
+
+        # Build combined question for compound field
+        prompts = [sf.get("prompt", sf.get("label", "")) for sf in subfields]
+        prompt_list = (
+            ", ".join(prompts[:-1]) + f" và {prompts[-1]}"
+            if len(prompts) > 1
+            else prompts[0]
+        )
+
+        return f"Vui lòng cung cấp thông tin {label}: {prompt_list}"
+
     # Vietnamese friendly question templates
     templates = {
         "email": "Vui lòng cho tôi biết địa chỉ email của bạn",
@@ -164,10 +186,10 @@ def _make_friendly_question(field: Dict[str, Any]) -> str:
         "number": f"Vui lòng nhập {label.lower()}",
         "text": f"Vui lòng cho tôi biết {label.lower()} của bạn",
     }
-    
+
     # Check if label contains common keywords
     label_lower = label.lower()
-    
+
     if "email" in label_lower or "mail" in label_lower:
         return "Vui lòng cho tôi biết địa chỉ email của bạn"
     elif "phone" in label_lower or "điện thoại" in label_lower or "sdt" in label_lower:
@@ -176,7 +198,9 @@ def _make_friendly_question(field: Dict[str, Any]) -> str:
         return f"Bạn có thể cho biết {label.lower()} không?"
     elif "name" in label_lower or "tên" in label_lower or "họ" in label_lower:
         return f"Vui lòng cho tôi biết {label.lower()} của bạn"
-    elif "address" in label_lower or "địa chỉ" in label_lower or "đia chi" in label_lower:
+    elif (
+        "address" in label_lower or "địa chỉ" in label_lower or "đia chi" in label_lower
+    ):
         return f"Bạn có thể cung cấp {label.lower()} không?"
     elif "job" in label_lower or "nghề" in label_lower or "công việc" in label_lower:
         return f"Vui lòng cho biết {label.lower()} của bạn"
@@ -188,20 +212,22 @@ def _make_friendly_question(field: Dict[str, Any]) -> str:
             return f"Vui lòng cung cấp thông tin về {label.lower()}"
 
 
-async def _validate_answer_with_openai(question: str, answer: Any, field_type: str) -> ValidationResponse:
+async def _validate_answer_with_openai(
+    question: str, answer: Any, field_type: str
+) -> ValidationResponse:
     """Validate if the answer is appropriate for the question using OpenAI"""
     client = _openai_client()
-    
+
     # If no OpenAI available, skip validation
     if client is None:
         return ValidationResponse(isValid=True, needsConfirmation=False)
-    
+
     # Basic validation - empty answers should be handled by skip logic, not here
     answer_str = str(answer).strip()
     if not answer_str or len(answer_str) < 1:
         # Empty answer - let it pass through, will be handled as skip
         return ValidationResponse(isValid=True, needsConfirmation=False)
-    
+
     try:
         system_prompt = """Bạn là trợ lý kiểm tra độ phù hợp của câu trả lời với câu hỏi trong biểu mẫu.
 Nhiệm vụ: Xác định câu trả lời có phù hợp với câu hỏi không.
@@ -236,35 +262,42 @@ Kiểm tra câu trả lời có hợp lệ không?"""
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
             temperature=0.3,
-            max_tokens=200
+            max_tokens=200,
         )
-        
+
         if not response.choices or not response.choices[0].message.content:
             return ValidationResponse(isValid=True, needsConfirmation=False)
-        
+
         import json
+
         result = json.loads(response.choices[0].message.content)
-        
+
         return ValidationResponse(
             isValid=result.get("isValid", True),
             message=result.get("message"),
-            needsConfirmation=result.get("needsConfirmation", False)
+            needsConfirmation=result.get("needsConfirmation", False),
         )
-        
+
     except Exception as e:
         print(f"[validation] OpenAI validation error: {e}")
         # On error, allow the answer (don't block user)
         return ValidationResponse(isValid=True, needsConfirmation=False)
 
 
-async def generate_next_question(form_schema: Dict[str, Any], answers: Dict[str, Any], skipped: List[str] = []) -> NextQuestionResponse:
+async def generate_next_question(
+    form_schema: Dict[str, Any], answers: Dict[str, Any], skipped: List[str] = []
+) -> NextQuestionResponse:
     # If no OpenAI key, fallback to deterministic next unanswered field
     # Skip fields that are already answered OR explicitly skipped
     answered_or_skipped = set(list(answers.keys()) + skipped)
-    unanswered = [f for f in form_schema.get("fields", []) if f.get("id") not in answered_or_skipped]
+    unanswered = [
+        f
+        for f in form_schema.get("fields", [])
+        if f.get("id") not in answered_or_skipped
+    ]
     if not unanswered:
         return NextQuestionResponse(done=True)
 
@@ -275,21 +308,24 @@ async def generate_next_question(form_schema: Dict[str, Any], answers: Dict[str,
         friendly_text = _make_friendly_question(field)
         return NextQuestionResponse(
             nextQuestion=Question(
-                id=field["id"], 
-                text=friendly_text, 
-                type=field.get("type", "text"), 
-                required=field.get("required", True)
+                id=field["id"],
+                text=friendly_text,
+                type=field.get("type", "text"),
+                required=field.get("required", True),
             ),
             missingFields=[f["id"] for f in unanswered],
             done=False,
         )
 
     # With OpenAI: request JSON-structured next question with better prompt
-    system = """You are a friendly Vietnamese assistant helping users fill out forms.
-Generate natural, conversational questions in Vietnamese that are warm and helpful.
-Always return JSON with format: {"nextQuestion": {"id": "field_id", "text": "friendly question", "type": "text"}, "missingFields": [], "done": false}
-Make questions conversational, not just field labels."""
-    
+    system = (
+        "You are a friendly Vietnamese assistant helping users fill out forms. "
+        "Generate natural, conversational questions in Vietnamese that are warm and helpful. "
+        'Always return JSON with format: {"nextQuestion": {"id": "field_id", '
+        '"text": "friendly question", "type": "text"}, "missingFields": [], "done": false} '
+        "Make questions conversational, not just field labels."
+    )
+
     user_prompt = f"""Based on this form schema and already provided answers, generate the next question:
 
 Form title: {form_schema.get('title', 'Form')}
@@ -301,7 +337,7 @@ Generate a friendly, conversational Vietnamese question for the next unanswered 
 Example: Instead of "Phone", ask "Bạn có thể cho tôi biết số điện thoại của bạn không?"
 IMPORTANT: Do NOT ask about fields that are already answered or skipped.
 """
-    
+
     try:
         resp = client.chat.completions.create(
             model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
@@ -338,10 +374,10 @@ IMPORTANT: Do NOT ask about fields that are already answered or skipped.
         friendly_text = _make_friendly_question(field)
         return NextQuestionResponse(
             nextQuestion=Question(
-                id=field["id"], 
-                text=friendly_text, 
-                type=field.get("type", "text"), 
-                required=field.get("required", True)
+                id=field["id"],
+                text=friendly_text,
+                type=field.get("type", "text"),
+                required=field.get("required", True),
             ),
             missingFields=[f["id"] for f in unanswered],
             done=False,
@@ -358,7 +394,9 @@ def _detect_device_type(user_agent: str) -> str:
 
 
 @app.post("/sessions")
-async def start_session(payload: StartSessionRequest, request: Request, db=Depends(get_db)):
+async def start_session(
+    payload: StartSessionRequest, request: Request, db=Depends(get_db)
+):
     form = await db.forms.find_one({"id": payload.formId})
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
@@ -369,7 +407,9 @@ async def start_session(payload: StartSessionRequest, request: Request, db=Depen
         "formId": payload.formId,
         "answers": {},
         "status": "active",
-        "createdAt": int(os.getenv("CURRENT_TIME", str(int(__import__('time').time())))),
+        "createdAt": int(
+            os.getenv("CURRENT_TIME", str(int(__import__("time").time())))
+        ),
         "client": {
             "userAgent": user_agent,
             "ip": client_ip,
@@ -384,17 +424,19 @@ async def start_session(payload: StartSessionRequest, request: Request, db=Depen
 
 
 @app.post("/sessions/{session_id}/next-question")
-async def next_question(session_id: str, payload: NextQuestionRequest, request: Request, db=Depends(get_db)):
+async def next_question(
+    session_id: str, payload: NextQuestionRequest, request: Request, db=Depends(get_db)
+):
     # Try to find by ObjectId first
     try:
         session = await db.sessions.find_one({"_id": ObjectId(session_id)})
     except Exception:
         session = None
-    
+
     # Fallback: try to find by string id field
     if not session:
         session = await db.sessions.find_one({"sessionId": session_id})
-    
+
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -403,99 +445,104 @@ async def next_question(session_id: str, payload: NextQuestionRequest, request: 
         raise HTTPException(status_code=404, detail="Form not found")
 
     validation_result = None
-    
+
     # Validate answer if provided (and not empty/skip)
     if payload.lastAnswer is not None:
         answer_value = payload.lastAnswer.value
-        
+
         # Check if user wants to skip (empty answer or special skip marker)
-        is_skip = not answer_value or str(answer_value).strip() == "" or str(answer_value).strip().lower() in ["skip", "bỏ qua"]
-        
+        is_skip = (
+            not answer_value
+            or str(answer_value).strip() == ""
+            or str(answer_value).strip().lower() in ["skip", "bỏ qua"]
+        )
+
         if is_skip:
             # User wants to skip this question - mark as skipped but don't save answer
             skipped_list = session.get("skipped", [])
             if payload.lastAnswer.fieldId not in skipped_list:
                 skipped_list.append(payload.lastAnswer.fieldId)
-            
+
             updates = {
                 "skipped": skipped_list,
-                "lastActiveAt": int(__import__('time').time()),
+                "lastActiveAt": int(__import__("time").time()),
             }
-            await db.sessions.update_one(
-                {"_id": session.get("_id")},
-                {"$set": updates}
-            )
-            
+            await db.sessions.update_one({"_id": session.get("_id")}, {"$set": updates})
+
             # Move to next question (use updated skipped list)
             resp = await generate_next_question(
-                form_schema=form, 
+                form_schema=form,
                 answers=session.get("answers", {}),
-                skipped=skipped_list
+                skipped=skipped_list,
             )
             return resp
-        
+
         # Not skipping, validate the answer
-        field = next((f for f in form.get("fields", []) if f.get("id") == payload.lastAnswer.fieldId), None)
-        
+        field = next(
+            (
+                f
+                for f in form.get("fields", [])
+                if f.get("id") == payload.lastAnswer.fieldId
+            ),
+            None,
+        )
+
         if field:
             # Get the question text (try to find it from previous session state or generate it)
             question_text = _make_friendly_question(field)
             field_type = field.get("type", "text")
-            
+
             # Validate the answer
             validation_result = await _validate_answer_with_openai(
-                question=question_text,
-                answer=answer_value,
-                field_type=field_type
+                question=question_text, answer=answer_value, field_type=field_type
             )
-            
+
             # If validation failed completely, return error response with validation info
             if not validation_result.isValid:
                 # Don't save the answer, return validation error
                 resp = await generate_next_question(
-                    form_schema=form, 
+                    form_schema=form,
                     answers=session.get("answers", {}),
-                    skipped=session.get("skipped", [])
+                    skipped=session.get("skipped", []),
                 )
                 resp.validation = validation_result
                 return resp
-            
+
             # If needs confirmation, return current state with validation warning
             if validation_result.needsConfirmation:
                 # Save the answer but ask for confirmation
-                session.setdefault("answers", {})[payload.lastAnswer.fieldId] = answer_value
+                session.setdefault("answers", {})[
+                    payload.lastAnswer.fieldId
+                ] = answer_value
                 updates = {
                     "answers": session["answers"],
-                    "lastActiveAt": int(__import__('time').time()),
+                    "lastActiveAt": int(__import__("time").time()),
                 }
                 await db.sessions.update_one(
                     {"_id": session.get("_id")},
-                    {"$set": updates, "$inc": {"answerCount": 1}}
+                    {"$set": updates, "$inc": {"answerCount": 1}},
                 )
                 # Return next question with validation warning
                 resp = await generate_next_question(
-                    form_schema=form, 
+                    form_schema=form,
                     answers=session["answers"],
-                    skipped=session.get("skipped", [])
+                    skipped=session.get("skipped", []),
                 )
                 resp.validation = validation_result
                 return resp
-        
+
         # Answer is valid, save it
         session.setdefault("answers", {})[payload.lastAnswer.fieldId] = answer_value
         updates = {
             "answers": session["answers"],
-            "lastActiveAt": int(__import__('time').time()),
+            "lastActiveAt": int(__import__("time").time()),
         }
         await db.sessions.update_one(
-            {"_id": session.get("_id")},
-            {"$set": updates, "$inc": {"answerCount": 1}}
+            {"_id": session.get("_id")}, {"$set": updates, "$inc": {"answerCount": 1}}
         )
 
     resp = await generate_next_question(
-        form_schema=form, 
-        answers=session["answers"],
-        skipped=session.get("skipped", [])
+        form_schema=form, answers=session["answers"], skipped=session.get("skipped", [])
     )
     if validation_result:
         resp.validation = validation_result
@@ -504,53 +551,54 @@ async def next_question(session_id: str, payload: NextQuestionRequest, request: 
 
 # Minimal fill implementation (overlay stub)
 from io import BytesIO
-from fastapi.responses import StreamingResponse
+
 import boto3
+from fastapi.responses import StreamingResponse
 from pypdf import PdfReader, PdfWriter
-from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 
 
 # Register Unicode font for Vietnamese support
 def _register_unicode_font():
     """Register a Unicode-compatible font for Vietnamese text"""
-    import os
     import glob
-    
+    import os
+
     # List of font paths to try (macOS, Linux, Windows)
     font_candidates = [
         # Linux (Debian/Ubuntu) - most common in Docker
-        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-        '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
-        '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
-        '/usr/share/fonts/TTF/DejaVuSans.ttf',
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
         # macOS
-        '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
-        '/Library/Fonts/Arial Unicode.ttf',
-        '/System/Library/Fonts/STHeiti Light.ttc',
-        '/System/Library/Fonts/PingFang.ttc',
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+        "/System/Library/Fonts/STHeiti Light.ttc",
+        "/System/Library/Fonts/PingFang.ttc",
         # Windows
-        'C:/Windows/Fonts/Arial.ttf',
-        'C:/Windows/Fonts/arialuni.ttf',
+        "C:/Windows/Fonts/Arial.ttf",
+        "C:/Windows/Fonts/arialuni.ttf",
     ]
-    
+
     # Try each font
     for font_path in font_candidates:
         if os.path.exists(font_path):
             try:
-                font_name = 'UnicodeFont'
+                font_name = "UnicodeFont"
                 pdfmetrics.registerFont(TTFont(font_name, font_path))
                 print(f"✅ Registered font: {font_path}")
                 return font_name
             except Exception as e:
                 print(f"⚠️  Failed to register {font_path}: {e}")
                 continue
-    
+
     # Ultimate fallback: use Helvetica
     print("⚠️  No Unicode font found, using Helvetica (Vietnamese may show as boxes)")
-    return 'Helvetica'
+    return "Helvetica"
 
 
 # Try to register Unicode font at startup
@@ -559,26 +607,30 @@ UNICODE_FONT = _register_unicode_font()
 
 def _detect_file_type(file_bytes: bytes) -> str:
     """Detect file type from magic bytes"""
-    if file_bytes.startswith(b'%PDF'):
-        return 'pdf'
-    if file_bytes.startswith(b'PK'):
-        return 'docx_or_zip'
-    if file_bytes.startswith(b'\xD0\xCF\x11\xE0'):
-        return 'doc_ole'
-    return 'unknown'
+    if file_bytes.startswith(b"%PDF"):
+        return "pdf"
+    if file_bytes.startswith(b"PK"):
+        return "docx_or_zip"
+    if file_bytes.startswith(b"\xD0\xCF\x11\xE0"):
+        return "doc_ole"
+    return "unknown"
 
 
-def overlay_pdf(base_pdf_bytes: bytes, annotations: Dict[str, Any], form_schema: Optional[Dict[str, Any]] = None) -> bytes:
+def overlay_pdf(
+    base_pdf_bytes: bytes,
+    annotations: Dict[str, Any],
+    form_schema: Optional[Dict[str, Any]] = None,
+) -> bytes:
     """Overlay annotations on PDF with smart positioning"""
     try:
         base_reader = PdfReader(BytesIO(base_pdf_bytes))
         writer = PdfWriter()
-        
+
         # Get page dimensions from first page
         first_page = base_reader.pages[0]
         page_width = float(first_page.mediabox.width)
         page_height = float(first_page.mediabox.height)
-        
+
         # Create field position mapping from schema
         field_positions = {}
         if form_schema:
@@ -587,14 +639,11 @@ def overlay_pdf(base_pdf_bytes: bytes, annotations: Dict[str, Any], form_schema:
                 bbox = field.get("bbox")
                 page_num = field.get("page", 1)
                 if field_id and bbox:
-                    field_positions[field_id] = {
-                        "bbox": bbox,
-                        "page": page_num
-                    }
-        
+                    field_positions[field_id] = {"bbox": bbox, "page": page_num}
+
         # Create overlay for each page
         pages_with_overlays = {}
-        
+
         for field_id, value in annotations.items():
             # Get field position if available
             if field_id in field_positions:
@@ -612,23 +661,22 @@ def overlay_pdf(base_pdf_bytes: bytes, annotations: Dict[str, Any], form_schema:
                 y_offset = 30  # Better spacing
                 x = margin
                 y = y_start - (idx * y_offset)
-            
+
             # Ensure page overlay exists
             if page_num not in pages_with_overlays:
                 pages_with_overlays[page_num] = BytesIO()
                 pages_with_overlays[page_num].canvas = canvas.Canvas(
-                    pages_with_overlays[page_num], 
-                    pagesize=(page_width, page_height)
+                    pages_with_overlays[page_num], pagesize=(page_width, page_height)
                 )
-            
+
             can = pages_with_overlays[page_num].canvas
-            
+
             # Format value based on type (remove field_id prefix for cleaner output)
             display_value = str(value) if value else ""
-            
+
             # Set font with Vietnamese support
             can.setFont(UNICODE_FONT, 10)
-            
+
             # Word wrap for long text
             max_width = page_width - x - 50
             if can.stringWidth(display_value, UNICODE_FONT, 10) > max_width:
@@ -646,19 +694,19 @@ def overlay_pdf(base_pdf_bytes: bytes, annotations: Dict[str, Any], form_schema:
                         current_line = word
                 if current_line:
                     lines.append(current_line)
-                
+
                 # Draw wrapped lines
                 for i, line in enumerate(lines):
                     can.drawString(x, y - (i * 12), line)
             else:
                 # Draw single line
                 can.drawString(x, y, display_value)
-        
+
         # Finalize all overlays
         for page_num, overlay_io in pages_with_overlays.items():
             overlay_io.canvas.save()
             overlay_io.seek(0)
-        
+
         # Merge overlays with base PDF pages
         for i, page in enumerate(base_reader.pages):
             page_num = i + 1
@@ -667,7 +715,7 @@ def overlay_pdf(base_pdf_bytes: bytes, annotations: Dict[str, Any], form_schema:
                 if len(overlay_reader.pages) > 0:
                     page.merge_page(overlay_reader.pages[0])
             writer.add_page(page)
-        
+
         # Write output
         out_stream = BytesIO()
         writer.write(out_stream)
@@ -682,12 +730,12 @@ def create_pdf_from_answers(answers: Dict[str, Any]) -> bytes:
     """Create a new PDF with filled answers"""
     packet = BytesIO()
     can = canvas.Canvas(packet, pagesize=letter)
-    
+
     # Title with Vietnamese support
     can.setFont(UNICODE_FONT, 16)
     can.drawString(72, 750, "Biểu mẫu đã điền")
     can.setFont(UNICODE_FONT, 12)
-    
+
     # Answers
     y_start = 700
     y_offset = 25
@@ -698,7 +746,7 @@ def create_pdf_from_answers(answers: Dict[str, Any]) -> bytes:
             can.setFont(UNICODE_FONT, 12)
             y = 750 - (idx * y_offset)
         can.drawString(72, y, f"{field_id}: {str(value)}")
-    
+
     can.save()
     packet.seek(0)
     return packet.read()
@@ -711,11 +759,11 @@ async def fill_pdf(session_id: str, payload: FillRequest, db=Depends(get_db)):
         session = await db.sessions.find_one({"_id": ObjectId(session_id)})
     except Exception:
         session = None
-    
+
     # Fallback: try to find by string id field
     if not session:
         session = await db.sessions.find_one({"sessionId": session_id})
-    
+
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     form = await db.forms.find_one({"id": session["formId"]}, {"_id": 0})
@@ -736,14 +784,14 @@ async def fill_pdf(session_id: str, payload: FillRequest, db=Depends(get_db)):
 
     obj = s3.get_object(Bucket=bucket, Key=key)
     file_bytes = obj["Body"].read()
-    
+
     # Get answers from session if not provided
     answers = payload.answers if payload.answers else session.get("answers", {})
-    
+
     # Detect file type
     file_type = _detect_file_type(file_bytes)
-    
-    if file_type == 'pdf':
+
+    if file_type == "pdf":
         try:
             filled = overlay_pdf(file_bytes, answers, form)
             return StreamingResponse(BytesIO(filled), media_type="application/pdf")
@@ -755,5 +803,3 @@ async def fill_pdf(session_id: str, payload: FillRequest, db=Depends(get_db)):
         # For non-PDF files (DOCX, DOC, images), create a new PDF with answers
         filled = create_pdf_from_answers(answers)
         return StreamingResponse(BytesIO(filled), media_type="application/pdf")
-
-
