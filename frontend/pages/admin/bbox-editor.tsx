@@ -50,6 +50,7 @@ export default function BboxEditor() {
   );
   const [scale, setScale] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [savedSuccessfully, setSavedSuccessfully] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pdfImageRef = useRef<HTMLImageElement>(null);
@@ -239,6 +240,7 @@ export default function BboxEditor() {
 
       await axios.post(`${API_BASE_URL}/admin/forms/${formId}/bbox`, updates);
 
+      setSavedSuccessfully(true);
       alert("✅ Đã lưu vị trí thành công!");
     } catch (error) {
       console.error("Failed to save bbox:", error);
@@ -366,6 +368,35 @@ export default function BboxEditor() {
           >
             {saving ? "⏳ Đang lưu..." : "💾 Lưu tất cả"}
           </button>
+
+          {savedSuccessfully && (
+            <div style={{ marginTop: "15px" }}>
+              <button
+                onClick={() =>
+                  router.push(`/forms/${encodeURIComponent(formId as string)}`)
+                }
+                style={{
+                  padding: "12px",
+                  width: "100%",
+                  backgroundColor: "#4CAF50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "5px",
+                  cursor: "pointer",
+                  fontSize: "16px",
+                  fontWeight: "bold",
+                  marginBottom: "10px",
+                }}
+              >
+                ✅ Quay lại form & test lại
+              </button>
+              <div
+                style={{ fontSize: "12px", color: "#666", textAlign: "center" }}
+              >
+                Điền lại form để kiểm tra vị trí field mới
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Canvas - PDF Viewer */}
