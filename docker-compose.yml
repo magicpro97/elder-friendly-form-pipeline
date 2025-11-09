@@ -30,6 +30,11 @@ services:
       API_PORT: 8000
       OPENAI_MODEL: gpt-4o-mini
       CORS_ORIGINS: "*"
+      AWS_REGION: ${AWS_REGION}
+      FORMS_BUCKET: ${FORMS_BUCKET}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
       - ./api/app:/app/app:rw
     depends_on:
@@ -40,7 +45,7 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   frontend:
-    build: 
+    build:
       context: ./frontend
       target: dev
     container_name: frontend
@@ -86,6 +91,3 @@ services:
       mongodb:
         condition: service_healthy
     networks: [backend]
-
-
-

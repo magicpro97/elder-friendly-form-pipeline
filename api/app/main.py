@@ -1,5 +1,8 @@
 import json
+import logging
 import os
+import subprocess
+import tempfile
 from io import BytesIO
 from typing import Any, Dict, List, Optional
 
@@ -16,6 +19,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
+
+logger = logging.getLogger(__name__)
 
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/forms")
 API_PORT = int(os.getenv("API_PORT", "8000"))
@@ -776,12 +781,67 @@ def _detect_file_type(file_bytes: bytes) -> str:
     return "unknown"
 
 
+def _convert_doc_to_pdf(doc_bytes: bytes, filename: str = "input.doc") -> bytes:
+    """Convert DOC/DOCX to PDF using LibreOffice"""
+    try:
+        # Create temp directory for conversion
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Write DOC to temp file
+            input_ext = ".doc" if filename.endswith(".doc") else ".docx"
+            input_path = os.path.join(tmpdir, f"input{input_ext}")
+            with open(input_path, "wb") as f:
+                f.write(doc_bytes)
+
+            # Convert using LibreOffice headless
+            # --headless: no GUI
+            # --convert-to pdf: output format
+            # --outdir: output directory
+            result = subprocess.run(
+                [
+                    "libreoffice",
+                    "--headless",
+                    "--convert-to",
+                    "pdf",
+                    "--outdir",
+                    tmpdir,
+                    input_path,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,  # 30s timeout
+            )
+
+            if result.returncode != 0:
+                logger.error(f"LibreOffice conversion failed: {result.stderr}")
+                raise Exception(f"Conversion failed: {result.stderr}")
+
+            # Read converted PDF
+            output_path = os.path.join(tmpdir, "input.pdf")
+            if not os.path.exists(output_path):
+                raise Exception("PDF output not found after conversion")
+
+            with open(output_path, "rb") as f:
+                pdf_bytes = f.read()
+
+            logger.info(
+                f"Successfully converted {filename} to PDF ({len(pdf_bytes)} bytes)"
+            )
+            return pdf_bytes
+
+    except subprocess.TimeoutExpired:
+        logger.error("LibreOffice conversion timeout")
+        raise Exception("Document conversion timeout (30s)")
+    except Exception as e:
+        logger.error(f"DOC/DOCX conversion error: {e}")
+        raise
+
+
 def overlay_pdf(
     base_pdf_bytes: bytes,
     annotations: Dict[str, Any],
     form_schema: Optional[Dict[str, Any]] = None,
 ) -> bytes:
-    """Overlay annotations on PDF with smart positioning"""
+    """Overlay annotations on PDF - ALWAYS preserves original form"""
     try:
         base_reader = PdfReader(BytesIO(base_pdf_bytes))
         writer = PdfWriter()
@@ -790,6 +850,62 @@ def overlay_pdf(
         first_page = base_reader.pages[0]
         page_width = float(first_page.mediabox.width)
         page_height = float(first_page.mediabox.height)
+
+        # Get image dimensions from bbox detection metadata (if available)
+        bbox_detection = form_schema.get("bbox_detection", {}) if form_schema else {}
+        image_width = bbox_detection.get("image_width")
+        image_height = bbox_detection.get("image_height")
+
+        # Get font info from metadata (for consistent rendering)
+        font_info = bbox_detection.get("font_info", {})
+        primary_font = font_info.get("primary_font", "Times-Roman")
+        font_size = font_info.get("font_size", 12)
+
+        # Map PDF font names to ReportLab/system fonts
+        font_to_use = UNICODE_FONT  # Default to Unicode font
+        print(f"[FONT DEBUG] bbox_detection font_info: {font_info}")
+        print(f"[FONT DEBUG] primary_font: {primary_font}")
+        if "times" in primary_font.lower() or "liberation" in primary_font.lower():
+            # Try to use Times-like font
+            try:
+                # Check if LiberationSerif exists
+                if os.path.exists(
+                    "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf"
+                ):
+                    pdfmetrics.registerFont(
+                        TTFont(
+                            "LiberationSerif",
+                            "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+                        )
+                    )
+                    font_to_use = "LiberationSerif"
+                    print(
+                        f"[FONT DEBUG] ✅ Using LiberationSerif font (matches {primary_font})"
+                    )
+                    logger.info(f"Using LiberationSerif font (matches {primary_font})")
+            except Exception as e:
+                print(f"[FONT DEBUG] ❌ Could not load LiberationSerif: {e}")
+                logger.warning(
+                    f"Could not load LiberationSerif: {e}, using {UNICODE_FONT}"
+                )
+
+        print(f"[FONT DEBUG] Final font_to_use: {font_to_use}")
+        logger.info(f"Overlay font: {font_to_use} (PDF original: {primary_font})")
+
+        # Calculate scale factor from image coordinates to PDF coordinates
+        if image_width and image_height:
+            scale_x = page_width / image_width
+            scale_y = page_height / image_height
+            logger.info(
+                f"Scaling bbox: image {image_width}x{image_height} → "
+                f"PDF {page_width}x{page_height} "
+                f"(scale {scale_x:.3f}x{scale_y:.3f})"
+            )
+        else:
+            # No image dimensions - assume coordinates are already in PDF points
+            scale_x = 1.0
+            scale_y = 1.0
+            logger.warning("No image dimensions in bbox_detection, using scale=1.0")
 
         # Create field position mapping from schema
         field_positions = {}
@@ -804,23 +920,164 @@ def overlay_pdf(
         # Create overlay for each page
         pages_with_overlays = {}
 
+        # Only create overlays if there are answers
+        if not annotations:
+            # No answers - return original PDF unchanged
+            for page in base_reader.pages:
+                writer.add_page(page)
+            out_stream = BytesIO()
+            writer.write(out_stream)
+            out_stream.seek(0)
+            return out_stream.read()
+
+        # Check if we have valid bbox positions for ALL fields
+        has_valid_positions = all(
+            field_id in field_positions for field_id in annotations.keys()
+        )
+
+        if not has_valid_positions:
+            # No bbox positions - add original pages + answer summary page
+            logger.info("No bbox positions available, creating answer summary page")
+
+            # Add all original pages
+            for page in base_reader.pages:
+                writer.add_page(page)
+
+            # Create answer summary page
+            summary_page = BytesIO()
+            can = canvas.Canvas(summary_page, pagesize=(page_width, page_height))
+
+            # Title
+            can.setFont(UNICODE_FONT, 16)
+            title_text = "Thông tin đã điền"
+            can.drawString(72, page_height - 60, title_text)
+
+            # Subtitle
+            can.setFont(UNICODE_FONT, 10)
+            can.drawString(
+                72,
+                page_height - 80,
+                "(Vui lòng kiểm tra và điền vào form gốc bên trên)",
+            )
+
+            # Draw answers
+            y = page_height - 120
+            can.setFont(UNICODE_FONT, 11)
+
+            for field_id, value in annotations.items():
+                if not value or str(value).strip() == "":
+                    continue
+
+                # Find field label
+                field_label = field_id
+                if form_schema:
+                    for field in form_schema.get("fields", []):
+                        if field.get("id") == field_id:
+                            field_label = field.get("label", field_id)
+                            break
+
+                # Draw label (bold-ish by using size 11)
+                can.setFont(UNICODE_FONT, 11)
+                can.drawString(72, y, f"• {field_label}:")
+                y -= 18
+
+                # Draw value (indented, size 10)
+                can.setFont(UNICODE_FONT, 10)
+                display_value = str(value)
+                max_width = page_width - 144
+
+                # Word wrap
+                if can.stringWidth(display_value, UNICODE_FONT, 10) > max_width:
+                    words = display_value.split()
+                    lines = []
+                    current_line = ""
+                    for word in words:
+                        test_line = current_line + " " + word if current_line else word
+                        if can.stringWidth(test_line, UNICODE_FONT, 10) <= max_width:
+                            current_line = test_line
+                        else:
+                            if current_line:
+                                lines.append(current_line)
+                            current_line = word
+                    if current_line:
+                        lines.append(current_line)
+
+                    for line in lines:
+                        can.drawString(90, y, line)
+                        y -= 14
+                else:
+                    can.drawString(90, y, display_value)
+                    y -= 14
+
+                y -= 10  # Extra space between fields
+
+                # New page if needed
+                if y < 80:
+                    can.showPage()
+                    can.setFont(UNICODE_FONT, 11)
+                    y = page_height - 60
+
+            can.save()
+            summary_page.seek(0)
+
+            # Add summary page(s)
+            summary_reader = PdfReader(summary_page)
+            for page in summary_reader.pages:
+                writer.add_page(page)
+
+            out_stream = BytesIO()
+            writer.write(out_stream)
+            out_stream.seek(0)
+            return out_stream.read()
+
         for field_id, value in annotations.items():
+            # Skip empty values
+            if not value or str(value).strip() == "":
+                continue
             # Get field position if available
             if field_id in field_positions:
                 pos = field_positions[field_id]
                 page_num = pos["page"]
-                bbox = pos["bbox"]  # [x, y, width, height]
-                x, y = bbox[0], bbox[1]
+                bbox = pos["bbox"]  # {x, y, width, height} dict or [x, y, w, h] list
+
+                # Handle both dict and list format
+                if isinstance(bbox, dict):
+                    x, y = bbox["x"], bbox["y"]
+                    bbox_height = bbox.get("height", 20)  # Get height for Y adjustment
+                else:
+                    x, y = bbox[0], bbox[1]
+                    bbox_height = bbox[3] if len(bbox) > 3 else 20
+
+                # Scale from image coordinates to PDF coordinates
+                x = x * scale_x
+                y = y * scale_y
+                bbox_height = bbox_height * scale_y
+
+                # Convert image coordinates (top-left origin) to PDF coordinates (bottom-left origin)
+                # PDF uses bottom-left as (0,0), image uses top-left as (0,0)
+                # Add 70% bbox_height to account for text baseline (text positioned in lower part of bbox)
+                y = (
+                    page_height - y - (bbox_height * 0.7)
+                )  # Flip Y axis and adjust for text baseline
+
+                logger.info(
+                    f"Drawing {field_id} at ({x:.1f}, {y:.1f}) on page "
+                    f"{page_num} (scaled from image coords, "
+                    f"bbox_height={bbox_height:.1f})"
+                )
+
+                use_label = False  # Don't show label when using bbox
             else:
                 # Smart fallback: distribute fields vertically on first page
                 page_num = 1
                 idx = list(annotations.keys()).index(field_id)
                 # Position from top with better spacing
-                margin = 50
-                y_start = page_height - margin - 60  # Leave space for header
-                y_offset = 30  # Better spacing
+                margin = 72  # 1 inch margin
+                y_start = page_height - margin - 100  # Leave space for header
+                y_offset = 50  # More spacing for label + value
                 x = margin
                 y = y_start - (idx * y_offset)
+                use_label = True  # Show label in fallback mode
 
             # Ensure page overlay exists
             if page_num not in pages_with_overlays:
@@ -831,22 +1088,45 @@ def overlay_pdf(
 
             can = pages_with_overlays[page_num].canvas
 
-            # Format value based on type (remove field_id prefix for cleaner output)
+            # Format value based on type
             display_value = str(value) if value else ""
 
-            # Set font with Vietnamese support
-            can.setFont(UNICODE_FONT, 10)
+            # If using fallback layout, show field label + value
+            if use_label:
+                # Find field label from schema
+                field_label = field_id  # Default to field_id
+                if form_schema:
+                    for field in form_schema.get("fields", []):
+                        if field.get("id") == field_id:
+                            field_label = field.get("label", field_id)
+                            break
 
-            # Word wrap for long text
-            max_width = page_width - x - 50
-            if can.stringWidth(display_value, UNICODE_FONT, 10) > max_width:
+                # Draw label in bold
+                can.setFont(UNICODE_FONT, 11)
+                can.drawString(x, y + 15, f"{field_label}:")
+
+                # Draw value below label
+                can.setFont(UNICODE_FONT, 10)
+                y_value = y  # Value position
+            else:
+                # Bbox mode: only draw value with detected font
+                can.setFont(font_to_use, int(font_size))
+                can.setFillColorRGB(0, 0, 0)  # Black text
+                y_value = y
+
+                # Word wrap for long text
+            max_width = page_width - x - 72  # 1 inch right margin
+            if can.stringWidth(display_value, font_to_use, int(font_size)) > max_width:
                 # Simple word wrap
                 words = display_value.split()
                 lines = []
                 current_line = ""
                 for word in words:
                     test_line = current_line + " " + word if current_line else word
-                    if can.stringWidth(test_line, UNICODE_FONT, 10) <= max_width:
+                    if (
+                        can.stringWidth(test_line, font_to_use, int(font_size))
+                        <= max_width
+                    ):
                         current_line = test_line
                     else:
                         if current_line:
@@ -857,10 +1137,10 @@ def overlay_pdf(
 
                 # Draw wrapped lines
                 for i, line in enumerate(lines):
-                    can.drawString(x, y - (i * 12), line)
+                    can.drawString(x, y_value - (i * 12), line)
             else:
                 # Draw single line
-                can.drawString(x, y, display_value)
+                can.drawString(x, y_value, display_value)
 
         # Finalize all overlays
         for page_num, overlay_io in pages_with_overlays.items():
@@ -881,31 +1161,32 @@ def overlay_pdf(
         writer.write(out_stream)
         out_stream.seek(0)
         return out_stream.read()
-    except Exception:
-        # If PDF overlay fails, create a new PDF with answers
-        return create_pdf_from_answers(annotations)
+    except Exception as e:
+        # If overlay fails, return ORIGINAL PDF unchanged to preserve form
+        # This ensures users can still write by hand even if overlay fails
+        logger.warning(f"PDF overlay failed: {e}, returning original PDF")
+        return base_pdf_bytes
 
 
 def create_pdf_from_answers(answers: Dict[str, Any]) -> bytes:
-    """Create a new PDF with filled answers"""
+    """Create a new PDF with filled answers - FALLBACK ONLY"""
     packet = BytesIO()
     can = canvas.Canvas(packet, pagesize=letter)
 
-    # Title with Vietnamese support
-    can.setFont(UNICODE_FONT, 16)
-    can.drawString(72, 750, "Biểu mẫu đã điền")
+    # Title - NO "Biểu mẫu đã điền" text to keep form valid
     can.setFont(UNICODE_FONT, 12)
 
     # Answers
-    y_start = 700
+    y_start = 750  # Start from top
     y_offset = 25
     for idx, (field_id, value) in enumerate(answers.items()):
         y = y_start - (idx * y_offset)
         if y < 50:  # New page if needed
             can.showPage()
             can.setFont(UNICODE_FONT, 12)
-            y = 750 - (idx * y_offset)
-        can.drawString(72, y, f"{field_id}: {str(value)}")
+            y = 750
+        # Display only value, not field_id to keep it clean
+        can.drawString(72, y, str(value) if value else "")
 
     can.save()
     packet.seek(0)
@@ -948,18 +1229,174 @@ async def fill_pdf(session_id: str, payload: FillRequest, db=Depends(get_db)):
     # Get answers from session if not provided
     answers = payload.answers if payload.answers else session.get("answers", {})
 
-    # Detect file type
-    file_type = _detect_file_type(file_bytes)
-
-    if file_type == "pdf":
-        try:
-            filled = overlay_pdf(file_bytes, answers, form)
-            return StreamingResponse(BytesIO(filled), media_type="application/pdf")
-        except Exception:
-            # If PDF overlay fails, create new PDF
-            filled = create_pdf_from_answers(answers)
-            return StreamingResponse(BytesIO(filled), media_type="application/pdf")
-    else:
-        # For non-PDF files (DOCX, DOC, images), create a new PDF with answers
+    # Always try overlay_pdf - it handles DOC/DOCX conversion internally
+    try:
+        filled = overlay_pdf(file_bytes, answers, form)
+        return StreamingResponse(BytesIO(filled), media_type="application/pdf")
+    except Exception as e:
+        logger.error(f"PDF overlay/conversion failed: {e}")
+        # If everything fails, create new PDF
         filled = create_pdf_from_answers(answers)
         return StreamingResponse(BytesIO(filled), media_type="application/pdf")
+
+
+# ============================================================================
+# ADMIN: BBOX EDITOR ENDPOINTS
+# ============================================================================
+
+
+class BboxUpdate(BaseModel):
+    field_id: str
+    bbox: Dict[str, float]  # {x, y, width, height, page}
+
+
+@app.get("/admin/forms/{form_id:path}/bbox-editor")
+async def get_bbox_editor_data(form_id: str, db=Depends(get_db)):
+    """
+    Get form data for bbox editing
+    Returns: form schema with fields, PDF URL, detected bbox positions
+    """
+    form = await db.forms.find_one({"id": form_id})
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+
+    # Return form schema + PDF access info
+    return {
+        "formId": form_id,
+        "title": form.get("title", form_id),
+        "fields": form.get("fields", []),
+        "pages": form.get("pages", 1),
+        "pdfUrl": f"/admin/forms/{form_id}/pdf",  # PDF download endpoint
+        "bboxDetection": form.get("bbox_detection", {}),  # Auto-detected positions
+    }
+
+
+@app.get("/admin/forms/{form_id:path}/pdf")
+async def get_form_pdf(form_id: str, db=Depends(get_db)):
+    """
+    Download form PDF for bbox editor
+    """
+    form = await db.forms.find_one({"id": form_id})
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+
+    bucket = form.get("source", {}).get("bucket")
+    key = form.get("source", {}).get("key")
+    if not bucket or not key:
+        raise HTTPException(status_code=400, detail="Form source not configured")
+
+    try:
+        # Get S3 endpoint (only set if not empty for LocalStack, omit for real AWS S3)
+        s3_endpoint = os.getenv("S3_ENDPOINT_URL")
+        s3_config = {
+            "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
+            "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+            "region_name": os.getenv("AWS_REGION", "us-east-1"),
+        }
+        if s3_endpoint:  # Only add endpoint_url if it's set (for LocalStack)
+            s3_config["endpoint_url"] = s3_endpoint
+
+        s3 = boto3.client("s3", **s3_config)
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        file_bytes = obj["Body"].read()
+
+        return StreamingResponse(
+            BytesIO(file_bytes),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"inline; filename={form_id.split('/')[-1]}"
+            },
+        )
+    except Exception as e:
+        logger.error(f"Failed to fetch PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch PDF: {str(e)}")
+
+
+@app.get("/admin/forms/{form_id:path}/preview")
+async def get_form_preview_image(form_id: str, page: int = 1, db=Depends(get_db)):
+    """
+    Convert PDF page to PNG image for canvas display
+    """
+    from pdf2image import convert_from_bytes
+
+    form = await db.forms.find_one({"id": form_id})
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+
+    bucket = form.get("source", {}).get("bucket")
+    key = form.get("source", {}).get("key")
+    if not bucket or not key:
+        raise HTTPException(status_code=400, detail="Form source not configured")
+
+    try:
+        # Get S3 endpoint
+        s3_endpoint = os.getenv("S3_ENDPOINT_URL")
+        s3_config = {
+            "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
+            "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+            "region_name": os.getenv("AWS_REGION", "us-east-1"),
+        }
+        if s3_endpoint:
+            s3_config["endpoint_url"] = s3_endpoint
+
+        s3 = boto3.client("s3", **s3_config)
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        pdf_bytes = obj["Body"].read()
+
+        # Convert PDF page to image (DPI 300 to match OCR coordinates)
+        images = convert_from_bytes(pdf_bytes, dpi=300, first_page=page, last_page=page)
+        if not images:
+            raise HTTPException(status_code=400, detail="Failed to render PDF page")
+
+        # Convert PIL image to PNG bytes
+        img_buffer = BytesIO()
+        images[0].save(img_buffer, format="PNG")
+        img_buffer.seek(0)
+
+        return StreamingResponse(
+            img_buffer,
+            media_type="image/png",
+            headers={"Content-Disposition": f"inline; filename=page{page}.png"},
+        )
+    except Exception as e:
+        logger.error(f"Failed to generate preview: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate preview: {str(e)}"
+        )
+
+
+@app.post("/admin/forms/{form_id:path}/bbox")
+async def update_field_bbox(
+    form_id: str, updates: List[BboxUpdate], db=Depends(get_db)
+):
+    """
+    Update bbox coordinates for form fields
+    Accepts array of {field_id, bbox: {x, y, width, height, page}}
+    """
+    form = await db.forms.find_one({"id": form_id})
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+
+    fields = form.get("fields", [])
+
+    # Apply bbox updates
+    updated_count = 0
+    for update in updates:
+        for field in fields:
+            if field["id"] == update.field_id:
+                field["bbox"] = update.bbox
+                updated_count += 1
+                logger.info(f"Updated bbox for {update.field_id}: {update.bbox}")
+                break
+
+    # Save updated fields to MongoDB
+    await db.forms.update_one({"id": form_id}, {"$set": {"fields": fields}})
+
+    logger.info(f"Updated {updated_count}/{len(updates)} bbox positions for {form_id}")
+
+    return {
+        "success": True,
+        "updated": updated_count,
+        "total": len(updates),
+        "fields": fields,
+    }

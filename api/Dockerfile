@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     fonts-dejavu-core \
     fonts-liberation \
+    libreoffice-writer \
+    libreoffice-java-common \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
@@ -20,4 +23,3 @@ EXPOSE 8000
 
 # Default command (can be overridden in docker-compose for dev mode with --reload)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-

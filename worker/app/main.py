@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import time
 from typing import Any, Dict
@@ -6,12 +7,18 @@ from typing import Any, Dict
 import boto3
 from botocore.exceptions import ClientError
 from pymongo import MongoClient
+
 try:
     # When executed as a package inside Docker: python -m app.main
     from .ocr import ocr_extract_fields
 except ImportError:
     # When executed directly: python main.py
     from ocr import ocr_extract_fields
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 
 def mongo_client():
@@ -64,11 +71,17 @@ def run_once():
     sqs = get_sqs_client()
     s3 = get_s3_client()
     mongo = mongo_client()
-    db = mongo.get_default_database() if "/" in os.getenv("MONGODB_URI", "") else mongo["forms"]
+    db = (
+        mongo.get_default_database()
+        if "/" in os.getenv("MONGODB_URI", "")
+        else mongo["forms"]
+    )
 
     try:
         print("[worker] Long polling SQS for messages...")
-        resp = sqs.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=1, WaitTimeSeconds=10)
+        resp = sqs.receive_message(
+            QueueUrl=queue_url, MaxNumberOfMessages=1, WaitTimeSeconds=10
+        )
     except ClientError as e:
         print("[worker] SQS error", e)
         time.sleep(5)
@@ -91,16 +104,43 @@ def run_once():
     content = obj["Body"].read()
 
     schema = ocr_extract_fields(content, event["key"])  # minimal extraction
-    
+
+    # If DOC/DOCX was converted to PDF, upload the PDF to S3
+    if schema.get("was_converted") and schema.get("converted_pdf_bytes"):
+        # Upload converted PDF with .pdf extension
+        original_key = event["key"]
+        # Change extension to .pdf (e.g., raw/file.doc -> raw/file.pdf)
+        if original_key.endswith(".doc") or original_key.endswith(".docx"):
+            pdf_key = original_key.rsplit(".", 1)[0] + ".pdf"
+        else:
+            pdf_key = original_key + ".pdf"
+
+        print(f"[worker] Uploading converted PDF to s3://{event['bucket']}/{pdf_key}")
+        s3.put_object(
+            Bucket=event["bucket"],
+            Key=pdf_key,
+            Body=schema["converted_pdf_bytes"],
+            ContentType="application/pdf",
+        )
+
+        # Update schema to point to PDF
+        schema["source"] = {"bucket": event["bucket"], "key": pdf_key}
+        schema["id"] = pdf_key  # Use PDF key as form ID
+        schema["original_key"] = original_key  # Keep reference to original DOC
+        print(f"[worker] Converted form will use PDF: {pdf_key}")
+
+        # Remove bytes from schema before MongoDB
+        del schema["converted_pdf_bytes"]
+        del schema["was_converted"]
+    else:
+        # Original file (PDF, image, etc.)
+        schema["id"] = event["key"]
+        schema["source"] = {"bucket": event["bucket"], "key": event["key"]}
+
     # Use extracted title if available, otherwise fallback to filename
-    title = schema.get("extracted_title") or os.path.basename(event["key"])
-    
-    schema.update({
-        "id": event["key"],
-        "title": title,
-        "source": {"bucket": event["bucket"], "key": event["key"]},
-        "createdAt": int(time.time())
-    })
+    title = schema.get("extracted_title") or os.path.basename(schema["id"])
+
+    schema.update({"title": title, "createdAt": int(time.time())})
     db.forms.update_one({"id": schema["id"]}, {"$set": schema}, upsert=True)
     print(f"[worker] Upserted form schema: {schema['id']}, title: {title}")
 
@@ -117,5 +157,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

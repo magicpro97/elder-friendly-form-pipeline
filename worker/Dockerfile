@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-vie \
     poppler-utils \
+    libreoffice-writer \
+    libreoffice-java-common \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
@@ -16,4 +18,3 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 
 CMD ["python", "-m", "app.main"]
-
