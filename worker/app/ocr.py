@@ -399,6 +399,103 @@ def _extract_text_from_doc_ole_best_effort(file_bytes: bytes) -> str:
         return ""
 
 
+def _extract_fields_with_openai(content: str) -> list:
+    """
+    Use OpenAI to intelligently extract ALL form fields from document content
+    Returns list of fields with proper types and labels
+    """
+    if not OPENAI_AVAILABLE:
+        logger.warning("OpenAI not available, cannot extract fields")
+        return []
+
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        logger.warning("OPENAI_API_KEY not set")
+        return []
+
+    try:
+        client = OpenAI(api_key=api_key)
+
+        # Use first 3000 chars to capture most form content
+        content_sample = content[:3000] if len(content) > 3000 else content
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Bạn là trợ lý phân tích biểu mẫu. "
+                        "Nhiệm vụ của bạn là phát hiện TẤT CẢ các trường (fields) "
+                        "cần điền trong biểu mẫu.\n\n"
+                        "Quy tắc:\n"
+                        '1. Tìm tất cả các trường có định dạng: "Label:", '
+                        '"Label......", "Label:_____", etc.\n'
+                        "2. Phân loại field type chính xác:\n"
+                        '   - "text": Văn bản thông thường (tên, địa chỉ, mô tả)\n'
+                        '   - "tel": Số điện thoại\n'
+                        '   - "email": Email\n'
+                        '   - "date": Ngày tháng\n'
+                        '   - "number": Số\n'
+                        '   - "textarea": Văn bản dài (nhiều dòng)\n\n'
+                        "3. Sử dụng label gốc trong biểu mẫu "
+                        "(giữ nguyên tiếng Việt có dấu)\n"
+                        "4. KHÔNG bỏ sót bất kỳ trường nào\n\n"
+                        "Trả về JSON với format:\n"
+                        "{\n"
+                        '  "fields": [\n'
+                        '    {"label": "Tên đầy đủ", "type": "text"},\n'
+                        '    {"label": "Số điện thoại", "type": "tel"},\n'
+                        "    ...\n"
+                        "  ]\n"
+                        "}\n\n"
+                        "CHỈ trả về JSON object, KHÔNG giải thích thêm."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Phân tích biểu mẫu này và liệt kê TẤT CẢ các trường "
+                        f"cần điền:\n\n{content_sample}"
+                    ),
+                },
+            ],
+            temperature=0.2,
+            max_tokens=1500,
+            response_format={"type": "json_object"},
+        )
+
+        if not response.choices or not response.choices[0].message.content:
+            logger.warning("OpenAI returned empty response for field extraction")
+            return []
+
+        result_text = response.choices[0].message.content.strip()
+
+        # Parse JSON response
+        import json
+
+        result = json.loads(result_text)
+
+        # Handle both {"fields": [...]} and direct array formats
+        if isinstance(result, dict) and "fields" in result:
+            fields_data = result["fields"]
+        elif isinstance(result, list):
+            fields_data = result
+        else:
+            logger.warning(f"Unexpected OpenAI response format: {result}")
+            return []
+
+        logger.info(f"OpenAI extracted {len(fields_data)} fields from form")
+        return fields_data
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse OpenAI JSON response: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"OpenAI field extraction failed: {e}")
+        return []
+
+
 def ocr_extract_fields(file_bytes: bytes, key_hint: str) -> Dict[str, Any]:
     # Multi-format text extraction with OCR fallbacks
     file_type = _detect_file_type(file_bytes)
@@ -450,6 +547,62 @@ def ocr_extract_fields(file_bytes: bytes, key_hint: str) -> Dict[str, Any]:
         s = re.sub(r"[^a-z0-9]+", "_", s)
         s = re.sub(r"_+", "_", s).strip("_")
         return s or "field"
+
+    def _detect_form_fields_from_patterns(text: str) -> list:
+        """
+        Detect form fields from common patterns like:
+        - "Label:" or "Label :"
+        - "Label.........."
+        - "Label:________"
+        Returns list of potential field labels
+        """
+        if not text:
+            return []
+
+        lines = text.split("\n")
+        detected_fields = []
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Pattern 1: "Label:" or "Label :"
+            colon_match = re.match(r"^(.+?):\s*$", line)
+            if colon_match:
+                label = colon_match.group(1).strip()
+                # Filter out common non-field labels
+                if len(label) > 2 and label.lower() not in [
+                    "kính gửi",
+                    "dear",
+                    "to",
+                    "from",
+                ]:
+                    detected_fields.append(label)
+                continue
+
+            # Pattern 2: "Label........" or "Label_______"
+            dot_match = re.match(r"^(.+?)(\.{3,}|_{3,})\s*$", line)
+            if dot_match:
+                label = dot_match.group(1).strip()
+                if len(label) > 2:
+                    detected_fields.append(label)
+                continue
+
+            # Pattern 3: "Label: value_placeholder" (more flexible)
+            colon_with_space = re.match(r"^(.+?):\s+(.{0,50})\s*$", line)
+            if colon_with_space:
+                label = colon_with_space.group(1).strip()
+                placeholder = colon_with_space.group(2).strip()
+                # If placeholder looks like a blank (dots, underscores, or short)
+                if (
+                    re.match(r"^[._\s]*$", placeholder)
+                    or len(placeholder) < 3
+                    and len(label) > 2
+                ):
+                    detected_fields.append(label)
+
+        return detected_fields
 
     def _infer_fields_from_text(t: str):
         t_lower = (t or "").lower()
@@ -709,7 +862,101 @@ def ocr_extract_fields(file_bytes: bytes, key_hint: str) -> Dict[str, Any]:
             )
         return fields
 
-    fields = _infer_fields_from_text(text)
+    # Try OpenAI-based field extraction first (intelligent detection)
+    openai_fields = _extract_fields_with_openai(text)
+
+    if openai_fields:
+        logger.info(f"Using OpenAI-extracted {len(openai_fields)} fields")
+        fields = []
+        for field_data in openai_fields:
+            fields.append(
+                {
+                    "id": _slugify(field_data.get("label", "field")),
+                    "label": field_data.get("label", ""),
+                    "type": field_data.get("type", "text"),
+                    "required": False,
+                    "page": 1,
+                    "bbox": None,
+                }
+            )
+    else:
+        # Fallback to keyword-based detection if OpenAI fails
+        logger.warning(
+            "OpenAI field extraction failed, using fallback keyword detection"
+        )
+        fields = _infer_fields_from_text(text)
+
+        # Enhance with pattern-detected fields as additional fallback
+        pattern_detected_labels = _detect_form_fields_from_patterns(text)
+        existing_labels = {f["label"].lower() for f in fields}
+
+        for label in pattern_detected_labels:
+            if label.lower() not in existing_labels:
+                # Infer field type from label
+                field_type = "text"  # Default
+                label_lower = label.lower()
+
+                if any(
+                    k in label_lower
+                    for k in [
+                        "phone",
+                        "telephone",
+                        "điện thoại",
+                        "dien thoai",
+                        "số điện thoại",
+                    ]
+                ):
+                    field_type = "tel"
+                elif any(
+                    k in label_lower
+                    for k in [
+                        "email",
+                        "e-mail",
+                        "thư điện tử",
+                        "thu dien tu",
+                    ]
+                ):
+                    field_type = "email"
+                elif any(
+                    k in label_lower
+                    for k in [
+                        "date",
+                        "ngày",
+                        "ngay",
+                        "sinh",
+                        "birth",
+                        "dob",
+                    ]
+                ):
+                    field_type = "date"
+                elif any(
+                    k in label_lower
+                    for k in [
+                        "địa chỉ",
+                        "dia chi",
+                        "address",
+                        "nơi ở",
+                        "noi o",
+                    ]
+                ):
+                    field_type = "text"  # Could be textarea but keep simple
+
+                fields.append(
+                    {
+                        "id": _slugify(label),
+                        "label": label,
+                        "type": field_type,
+                        "required": False,
+                        "page": 1,
+                        "bbox": None,
+                    }
+                )
+                existing_labels.add(label.lower())
+
+        logger.info(
+            f"Detected {len(fields)} fields using fallback: {len(pattern_detected_labels)} from patterns, "
+            f"{len(fields) - len(pattern_detected_labels)} from keywords"
+        )
 
     # Extract title from document content
     def _extract_title_from_text(t: str, filename: str) -> str:
