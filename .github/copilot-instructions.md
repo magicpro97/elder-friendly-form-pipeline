@@ -12,14 +12,68 @@
 
 ### Data Flow
 ```
-Internet → crawler → S3 → (S3 event) → SQS → worker → MongoDB (forms)
-                                                         ↓
-Frontend ← api (GPT-4o-mini Q&A) ← MongoDB (sessions + forms)
+Internet → crawler (smart multi-source) → S3 → (S3 event) → SQS → worker → MongoDB (forms)
+                ↓                                                                    ↓
+         MongoDB (crawled_forms)                                     MongoDB (sessions + forms)
+         (deduplication tracking)                                              ↓
+                                                                  api (GPT-4o-mini Q&A) ← Frontend
 ```
+
+### Crawler Strategy (Smart Crawling with Deduplication)
+
+**Multi-Source URLs**:
+```python
+FORM_SOURCES = [
+    {
+        "url": "https://csdl.dichvucong.gov.vn/...",  # Government official forms
+        "name": "gov_mau9_don_xin_viec",
+        "source": "gov.vn",
+        "format": "doc"
+    },
+    {
+        "url": "https://static.topcv.vn/...",  # TopCV job templates
+        "name": "topcv_don_xin_viec",
+        "source": "topcv.vn",
+        "format": "docx"
+    },
+    # Add more sources here
+]
+```
+
+**Deduplication Strategy**:
+1. **Hash-based**: Compute SHA256 of file content
+2. **MongoDB tracking**: Store in `crawled_forms` collection
+3. **Incremental**: Skip if same URL + hash exists
+4. **Metadata**: Track source, crawl time, S3 location
+
+**MongoDB Schema** (`crawled_forms`):
+```javascript
+{
+  "url": "https://...",
+  "name": "form_name",
+  "source": "gov.vn|topcv.vn|...",
+  "format": "doc|docx|pdf|xlsx",
+  "content_hash": "sha256...",  // For deduplication
+  "s3_key": "raw/form-timestamp.ext",
+  "s3_bucket": "bucket-name",
+  "crawled_at": ISODate("2025-11-09"),
+  "last_checked": ISODate("2025-11-09"),
+  "file_size": 19732
+}
+```
+
+**Crawl Behavior**:
+- Runs every 24 hours
+- Downloads each source URL
+- Computes hash, checks MongoDB
+- **Skips** if hash matches → No duplicate S3 uploads
+- **Uploads** if new/changed → Triggers SQS → Worker processes
+- Updates `last_checked` for existing forms
 
 ### Key Collections (MongoDB)
 - `forms`: OCR-extracted fields with `{id, label, type, bbox, page}` metadata
 - `sessions`: User answers `{formId, answers: {field_id: value}, client: {userAgent, ip, deviceType}}`
+- `crawled_forms`: Crawler tracking `{url, content_hash, s3_key, crawled_at, last_checked}` for deduplication
 - `gold`: Aggregated analytics (completion rates, field popularity) - see `gold_aggregator.py`
 
 ## Critical Workflows
