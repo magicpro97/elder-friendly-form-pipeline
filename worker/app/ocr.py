@@ -145,6 +145,235 @@ def _convert_doc_to_pdf(doc_bytes: bytes, filename: str = "input.doc") -> bytes:
         raise
 
 
+def _detect_all_input_fields_layout(pdf_bytes: bytes) -> Dict[str, Any]:
+    """
+    Layout-based input field detection - detects ALL input boxes regardless of labels.
+
+    Strategy:
+    1. Detect ALL horizontal lines (underscores for text input)
+    2. Detect ALL rectangles (boxes for input)
+    3. OCR ALL text blocks with positions
+    4. For each input element, find closest text label above/left
+    5. Return all detected input positions with their labels
+
+    This is more robust than keyword matching - works for ANY form.
+    """
+    try:
+        logger.info("[Layout] Starting layout-based bbox detection")
+
+        # Convert PDF first page to image
+        images = convert_from_bytes(pdf_bytes, dpi=300, first_page=1, last_page=1)
+        if not images:
+            logger.warning("[Layout] No images from PDF")
+            return {"field_positions": []}
+
+        # Convert PIL to OpenCV format
+        img = images[0]
+        img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+        height, width = gray.shape
+
+        logger.info(f"[Layout] Image size: {width}x{height}")
+
+        # 1. Detect horizontal lines (underscores) with multiple kernel sizes
+        input_elements = []
+
+        # Try smaller kernel first for short underlines
+        for kernel_width in [25, 40, 60]:
+            horizontal_kernel = cv2.getStructuringElement(
+                cv2.MORPH_RECT, (kernel_width, 1)
+            )
+            detect_horizontal = cv2.morphologyEx(
+                gray, cv2.MORPH_OPEN, horizontal_kernel, iterations=2
+            )
+            line_cnts = cv2.findContours(
+                detect_horizontal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            )
+            line_cnts = line_cnts[0] if len(line_cnts) == 2 else line_cnts[1]
+
+            for c in line_cnts:
+                x, y, w, h = cv2.boundingRect(c)
+                if w > 30:  # Lower minimum line width
+                    # Check for duplicates
+                    is_duplicate = False
+                    for elem in input_elements:
+                        if (
+                            abs(elem["x"] - x) < 30
+                            and abs(elem["y"] - y) < 10
+                            and abs(elem["width"] - w) < 50
+                        ):
+                            is_duplicate = True
+                            break
+
+                    if not is_duplicate:
+                        input_elements.append(
+                            {
+                                "x": x,
+                                "y": y,
+                                "width": w,
+                                "height": max(h, 20),
+                                "type": "line",
+                            }
+                        )
+
+        logger.info(f"[Layout] Detected {len(input_elements)} input lines")
+
+        # 2. Detect rectangles/boxes (alternative input style)
+        # Apply edge detection
+        edges = cv2.Canny(gray, 50, 150)
+        # Find contours
+        rect_cnts = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        rect_cnts = rect_cnts[0] if len(rect_cnts) == 2 else rect_cnts[1]
+
+        box_count = 0
+        for c in rect_cnts:
+            x, y, w, h = cv2.boundingRect(c)
+            # Looser filter: reasonable size for input box
+            if 50 < w < 1000 and 10 < h < 100 and w / h > 2:
+                # Check if not overlapping with existing lines
+                is_duplicate = False
+                for elem in input_elements:
+                    if (
+                        abs(elem["x"] - x) < 20
+                        and abs(elem["y"] - y) < 20
+                        and abs(elem["width"] - w) < 50
+                    ):
+                        is_duplicate = True
+                        break
+
+                if not is_duplicate:
+                    input_elements.append(
+                        {"x": x, "y": y, "width": w, "height": h, "type": "box"}
+                    )
+                    box_count += 1
+
+        logger.info(f"[Layout] Detected {box_count} input boxes")
+        logger.info(
+            f"[Layout] Total input elements (lines + boxes): {len(input_elements)}"
+        )
+
+        # 3. OCR all text with positions
+        ocr_data = pytesseract.image_to_data(
+            img, lang="vie+eng", output_type=pytesseract.Output.DICT
+        )
+
+        text_blocks = []
+        for i in range(len(ocr_data["text"])):
+            text = ocr_data["text"][i].strip()
+            if not text or len(text) < 2:  # Skip single chars
+                continue
+
+            text_blocks.append(
+                {
+                    "text": text,
+                    "x": ocr_data["left"][i],
+                    "y": ocr_data["top"][i],
+                    "width": ocr_data["width"][i],
+                    "height": ocr_data["height"][i],
+                    "conf": ocr_data["conf"][i],
+                }
+            )
+
+        logger.info(f"[Layout] Extracted {len(text_blocks)} text blocks")
+
+        # 4. For each input element, find closest text label
+        field_positions = []
+
+        for idx, elem in enumerate(input_elements):
+            # Find text blocks near this input element
+            # Look for text ABOVE or to the LEFT of input
+            elem_center_x = elem["x"] + elem["width"] / 2
+            elem_center_y = elem["y"] + elem["height"] / 2
+
+            # Find all candidate labels (above or left)
+            candidates = []
+
+            for block in text_blocks:
+                # Skip very short text (likely not a label)
+                if len(block["text"]) < 3:
+                    continue
+
+                block_center_x = block["x"] + block["width"] / 2
+                block_center_y = block["y"] + block["height"] / 2
+
+                # Check if text is above or left of input
+                # Above: same X column, Y is above
+                is_above = (
+                    abs(block_center_x - elem_center_x) < 300
+                    and block_center_y < elem_center_y
+                    and elem_center_y - block_center_y < 100
+                )
+
+                # Left: same Y row, X is left
+                is_left = (
+                    abs(block_center_y - elem_center_y) < 30
+                    and block_center_x < elem_center_x
+                    and elem_center_x - block_center_x < 400
+                )
+
+                if is_above or is_left:
+                    # Calculate distance
+                    distance = (
+                        (block_center_x - elem_center_x) ** 2
+                        + (block_center_y - elem_center_y) ** 2
+                    ) ** 0.5
+
+                    # Prioritize labels:
+                    # - Longer text (likely field labels)
+                    # - Text ending with ":" (common label pattern)
+                    # - Higher confidence
+                    priority_score = (
+                        len(block["text"]) * 10  # Favor longer text
+                        + (50 if block["text"].endswith(":") else 0)  # Label indicator
+                        + block["conf"] / 10  # OCR confidence
+                    )
+
+                    candidates.append(
+                        {
+                            "block": block,
+                            "distance": distance,
+                            "priority": priority_score,
+                        }
+                    )
+
+            # Choose best candidate: highest priority, then closest distance
+            closest_label = None
+            if candidates:
+                # Sort by priority (high to low), then distance (low to high)
+                candidates.sort(key=lambda c: (-c["priority"], c["distance"]))
+                closest_label = candidates[0]["block"]
+
+            if closest_label:
+                field_positions.append(
+                    {
+                        "field_id": f"field_{idx}",
+                        "label": closest_label["text"],
+                        "bbox": {
+                            "x": elem["x"],
+                            "y": elem["y"],
+                            "width": elem["width"],
+                            "height": elem["height"],
+                            "page": 1,
+                        },
+                        "confidence": closest_label["conf"],
+                        "auto_detected": True,
+                        "detection_type": "layout",
+                    }
+                )
+                logger.info(
+                    f"[Layout] Field {idx}: '{closest_label['text']}' → "
+                    f"input at ({elem['x']}, {elem['y']})"
+                )
+
+        logger.info(f"[Layout] Detected {len(field_positions)} labeled input fields")
+
+        return {"field_positions": field_positions}
+
+    except Exception as e:
+        logger.error(f"[Layout] Detection failed: {e}", exc_info=True)
+        return {"field_positions": []}
+
+
 def _detect_form_fields_opencv(pdf_bytes: bytes) -> Dict[str, Any]:
     """
     Auto-detect form field positions using OpenCV
@@ -1115,10 +1344,28 @@ def ocr_extract_fields(file_bytes: bytes, key_hint: str) -> Dict[str, Any]:
     if file_type == "pdf" or converted_pdf_bytes:
         # Use the final PDF bytes (either original or converted)
         pdf_for_bbox = converted_pdf_bytes if converted_pdf_bytes else file_bytes
-        logger.info(f"Running OpenCV bbox detection on PDF ({len(pdf_for_bbox)} bytes)")
+        logger.info(f"Running bbox detection on PDF ({len(pdf_for_bbox)} bytes)")
 
         try:
-            bbox_detection_result = _detect_form_fields_opencv(pdf_for_bbox)
+            # Try layout-based detection first (more robust, universal)
+            logger.info("[Bbox] Trying layout-based detection...")
+            bbox_detection_result = _detect_all_input_fields_layout(pdf_for_bbox)
+
+            # If layout detection found too few fields, fallback to keyword-based
+            detected_count = len(bbox_detection_result.get("field_positions", []))
+            if detected_count < 3:
+                logger.info(
+                    f"[Bbox] Layout detection found only {detected_count} fields, "
+                    f"trying keyword-based fallback..."
+                )
+                keyword_result = _detect_form_fields_opencv(pdf_for_bbox)
+                if len(keyword_result.get("field_positions", [])) > detected_count:
+                    bbox_detection_result = keyword_result
+                    logger.info(
+                        f"[Bbox] Using keyword-based detection "
+                        f"({len(keyword_result.get('field_positions', []))} fields)"
+                    )
+
             logger.info(
                 f"Bbox detection result: {len(bbox_detection_result.get('field_positions', []))} positions"
             )
