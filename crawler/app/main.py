@@ -6,10 +6,10 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
-import urllib3
 
 import boto3
 import requests
+import urllib3
 from pymongo import MongoClient
 
 # Disable SSL warnings when verify=False
@@ -32,6 +32,12 @@ FORM_SOURCES = [
     {
         "url": "https://static.topcv.vn/cms/19d60037982db4e139cd6b99f3adfefa.docx",
         "name": "topcv_don_xin_viec",
+        "source": "topcv.vn",
+        "format": "docx",
+    },
+    {
+        "url": "https://www.topcv.vn/download/mau-don-xin-viec/marketing.docx",
+        "name": "topcv_marketing_don_xin_viec",
         "source": "topcv.vn",
         "format": "docx",
     },
