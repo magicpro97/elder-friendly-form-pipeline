@@ -6,10 +6,14 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
+import urllib3
 
 import boto3
 import requests
 from pymongo import MongoClient
+
+# Disable SSL warnings when verify=False
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -64,10 +68,20 @@ def is_form_already_crawled(db, url: str, content_hash: str) -> Optional[Dict]:
 def download_form(url: str, timeout: int = 60) -> bytes:
     """Download form content from URL"""
     logger.info(f"Downloading from {url}")
-    resp = requests.get(url, timeout=timeout)
-    resp.raise_for_status()
-    logger.info(f"Downloaded {len(resp.content)} bytes")
-    return resp.content
+    try:
+        # Try with SSL verification first
+        resp = requests.get(url, timeout=timeout, verify=True)
+        resp.raise_for_status()
+        logger.info(f"Downloaded {len(resp.content)} bytes")
+        return resp.content
+    except requests.exceptions.SSLError as e:
+        # If SSL certificate verification fails (expired cert, etc.), try without verification
+        logger.warning(f"SSL verification failed for {url}: {e}")
+        logger.warning("Retrying without SSL verification...")
+        resp = requests.get(url, timeout=timeout, verify=False)
+        resp.raise_for_status()
+        logger.info(f"Downloaded {len(resp.content)} bytes (without SSL verification)")
+        return resp.content
 
 
 def upload_to_s3(
@@ -139,7 +153,9 @@ def crawl_form_source(source: Dict, s3_client, bucket: str, db) -> bool:
 
         # Upload to S3
         content_type = get_content_type(format)
+        logger.info(f"Uploading to S3: s3://{bucket}/{s3_key}")
         upload_to_s3(s3_client, bucket, s3_key, content, content_type)
+        logger.info(f"✓ Successfully uploaded to S3: s3://{bucket}/{s3_key}")
 
         # Track in MongoDB
         db.crawled_forms.insert_one(
@@ -157,7 +173,7 @@ def crawl_form_source(source: Dict, s3_client, bucket: str, db) -> bool:
             }
         )
 
-        logger.info(f"✓ Successfully crawled new form: {name} → {s3_key}")
+        logger.info(f"✓ Successfully crawled new form: {name} → s3://{bucket}/{s3_key}")
         return True
 
     except Exception as e:

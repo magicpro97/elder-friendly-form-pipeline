@@ -6,6 +6,7 @@ networks:
 
 volumes:
   mongo_data:
+  airflow_postgres_data:
 
 services:
   mongodb:
@@ -62,18 +63,19 @@ services:
     networks: [backend]
     command: ["npm", "run", "dev"]
 
-  crawler:
-    build: ./crawler
-    container_name: crawler
-    env_file: .env
-    environment:
-      AWS_REGION: ${AWS_REGION}
-      FORMS_BUCKET: ${FORMS_BUCKET}
-      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
-    volumes:
-      - ./crawler/app:/app/app:rw
-    command: ["python", "-m", "app.main", "--cron=0 3 * * *"]
-    networks: [backend]
+  # Crawler service đã được quản lý bởi Airflow (crawler_dag)
+  #   crawler:
+  #     build: ./crawler
+  #     container_name: crawler
+  #     env_file: .env
+  #     environment:
+  #       AWS_REGION: ${AWS_REGION}
+  #       FORMS_BUCKET: ${FORMS_BUCKET}
+  #       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+  #     volumes:
+  #       - ./crawler/app:/app/app:rw
+  #     command: ["python", "-m", "app.main", "--cron=0 3 * * *"]
+  #     networks: [backend]
 
   worker:
     build: ./worker
@@ -91,3 +93,112 @@ services:
       mongodb:
         condition: service_healthy
     networks: [backend]
+
+  # Airflow PostgreSQL database
+  airflow_postgres:
+    image: postgres:15
+    container_name: airflow_postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [backend]
+
+  # Airflow Redis (for Celery executor if needed)
+  airflow_redis:
+    image: redis:7
+    container_name: airflow_redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [backend]
+
+  # Airflow webserver
+  airflow_webserver:
+    build: ./airflow
+    container_name: airflow_webserver
+    env_file: .env
+    
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+      AIRFLOW__WEBSERVER__WORKERS: '1'
+      # Environment variables for DAGs
+      AWS_REGION: ${AWS_REGION}
+      FORMS_BUCKET: ${FORMS_BUCKET}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      MONGODB_URI: mongodb://mongodb:27017/forms
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags:rw
+      - ./airflow/logs:/opt/airflow/logs:rw
+      - ./airflow/plugins:/opt/airflow/plugins:rw
+      - ./crawler/app:/opt/airflow/crawler/app:ro
+      - ./api/app:/opt/airflow/api/app:ro
+      - ./worker/app:/opt/airflow/worker/app:ro
+    ports:
+      - "8080:8080"
+    command: webserver
+    depends_on:
+      airflow_postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Airflow scheduler
+  airflow_scheduler:
+    build: ./airflow
+    container_name: airflow_scheduler
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+      # Environment variables for DAGs
+      AWS_REGION: ${AWS_REGION}
+      FORMS_BUCKET: ${FORMS_BUCKET}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      MONGODB_URI: mongodb://mongodb:27017/forms
+      FORMS_QUEUE_URL: ${FORMS_QUEUE_URL}
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags:rw
+      - ./airflow/logs:/opt/airflow/logs:rw
+      - ./airflow/plugins:/opt/airflow/plugins:rw
+      - ./crawler/app:/opt/airflow/crawler/app:ro
+      - ./api/app:/opt/airflow/api/app:ro
+      - ./worker/app:/opt/airflow/worker/app:ro
+    command: scheduler
+    depends_on:
+      airflow_postgres:
+        condition: service_healthy
+      airflow_webserver:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks: [backend]
+    restart: always
