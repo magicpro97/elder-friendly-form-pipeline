@@ -1117,15 +1117,37 @@ def ocr_extract_fields(file_bytes: bytes, key_hint: str) -> Dict[str, Any]:
 
         # Merge detected bbox into fields
         if bbox_detection_result.get("field_positions"):
-            bbox_map = {
-                fp["field_id"]: fp["bbox"]
-                for fp in bbox_detection_result["field_positions"]
-            }
+            # Try to match bbox by label similarity (fuzzy matching)
+            # Since OpenCV uses hardcoded field_ids ("phone", "name")
+            # but OpenAI generates different IDs ("i_n_tho_i", "t_n_t_i_l")
+            import difflib
 
             for field in fields:
-                if field["id"] in bbox_map:
-                    field["bbox"] = bbox_map[field["id"]]
-                    logger.info(f"Applied auto-detected bbox for {field['id']}")
+                field_label_lower = field["label"].lower()
+
+                # Find best matching bbox by label similarity
+                best_match = None
+                best_score = 0
+
+                for fp in bbox_detection_result["field_positions"]:
+                    detected_label_lower = fp["label"].lower()
+
+                    # Calculate similarity score
+                    score = difflib.SequenceMatcher(
+                        None, field_label_lower, detected_label_lower
+                    ).ratio()
+
+                    if score > best_score and score > 0.3:  # Minimum 30% match
+                        best_score = score
+                        best_match = fp
+
+                if best_match:
+                    field["bbox"] = best_match["bbox"]
+                    logger.info(
+                        f"Applied bbox for '{field['label']}' "
+                        f"(matched with '{best_match['label']}', "
+                        f"score={best_score:.2f})"
+                    )
         else:
             logger.warning("No bbox positions detected by OpenCV")
 
