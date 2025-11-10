@@ -14,7 +14,7 @@ from pdf2image import convert_from_bytes
 from PIL import Image
 from pypdf import PdfReader
 
-# OpenAI for generating form titles
+# OpenAI for generating form titles and semantic matching
 try:
     from openai import OpenAI
 
@@ -23,6 +23,9 @@ except ImportError:
     OPENAI_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+# Cache for embeddings to reduce API calls
+_embedding_cache = {}
 
 
 def _extract_pdf_fonts(pdf_bytes: bytes) -> Dict[str, Any]:
@@ -143,6 +146,63 @@ def _convert_doc_to_pdf(doc_bytes: bytes, filename: str = "input.doc") -> bytes:
     except Exception as e:
         logger.error(f"DOC/DOCX conversion error: {e}")
         raise
+
+
+def _get_text_embedding(text: str) -> list:
+    """
+    Get OpenAI embedding for text using text-embedding-3-small model.
+    Uses cache to reduce API calls.
+    Returns: embedding vector (list of floats)
+    """
+    # Check cache first
+    cache_key = text.lower().strip()
+    if cache_key in _embedding_cache:
+        return _embedding_cache[cache_key]
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key or not OPENAI_AVAILABLE:
+        logger.warning("OPENAI_API_KEY not set or OpenAI not available")
+        return []
+
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.embeddings.create(
+            model="text-embedding-3-small", input=cache_key
+        )
+
+        embedding = response.data[0].embedding
+
+        # Cache the result
+        _embedding_cache[cache_key] = embedding
+
+        return embedding
+
+    except Exception as e:
+        logger.error(f"Embedding generation failed: {e}")
+        return []
+
+
+def _cosine_similarity(vec1: list, vec2: list) -> float:
+    """
+    Calculate cosine similarity between two vectors.
+    Returns: similarity score between 0.0 and 1.0
+    """
+    if not vec1 or not vec2:
+        return 0.0
+
+    # Convert to numpy arrays
+    v1 = np.array(vec1)
+    v2 = np.array(vec2)
+
+    # Calculate cosine similarity
+    dot_product = np.dot(v1, v2)
+    norm_v1 = np.linalg.norm(v1)
+    norm_v2 = np.linalg.norm(v2)
+
+    if norm_v1 == 0 or norm_v2 == 0:
+        return 0.0
+
+    return float(dot_product / (norm_v1 * norm_v2))
 
 
 def _detect_all_input_fields_layout(pdf_bytes: bytes) -> Dict[str, Any]:
@@ -1425,22 +1485,80 @@ def ocr_extract_fields(file_bytes: bytes, key_hint: str) -> Dict[str, Any]:
 
         # Merge detected bbox into fields
         if bbox_detection_result.get("field_positions"):
-            # Try to match bbox by label similarity (fuzzy matching)
-            # Since OpenCV uses hardcoded field_ids ("phone", "name")
-            # but OpenAI generates different IDs ("i_n_tho_i", "t_n_t_i_l")
+            # Use semantic matching with OpenAI embeddings for better accuracy
+            # This understands meaning, not just string similarity
+            # Example: "Số điện thoại" matches "Phone number" or "Di động"
+
+            # Precompute embeddings for all field labels (batch to reduce API calls)
+            field_embeddings = {}
+            for field in fields:
+                embedding = _get_text_embedding(field["label"])
+                if embedding:
+                    field_embeddings[field["id"]] = embedding
+
+            # Precompute embeddings for detected labels
+            detected_embeddings = {}
+            for fp in bbox_detection_result["field_positions"]:
+                embedding = _get_text_embedding(fp["label"])
+                if embedding:
+                    detected_embeddings[fp["label"]] = embedding
+
+            # Match fields to detected positions using semantic similarity
+            for field in fields:
+                if field["id"] not in field_embeddings:
+                    # Fallback to fuzzy matching if embedding failed
+                    continue
+
+                field_embedding = field_embeddings[field["id"]]
+                best_match = None
+                best_score = 0
+
+                for fp in bbox_detection_result["field_positions"]:
+                    if fp["label"] not in detected_embeddings:
+                        continue
+
+                    detected_embedding = detected_embeddings[fp["label"]]
+
+                    # Calculate semantic similarity using cosine similarity
+                    score = _cosine_similarity(field_embedding, detected_embedding)
+
+                    # Log all scores for debugging
+                    if score > 0.3:  # Only log meaningful scores
+                        logger.info(
+                            f"[Semantic] '{field['label']}' vs '{fp['label']}': "
+                            f"similarity={score:.2f}"
+                        )
+
+                    # Higher threshold for semantic matching (0.65 vs 0.3 for fuzzy)
+                    # Embeddings are more reliable so we can be stricter
+                    if score > best_score and score > 0.65:
+                        best_score = score
+                        best_match = fp
+
+                if best_match:
+                    field["bbox"] = best_match["bbox"]
+                    logger.info(
+                        f"[Semantic] Applied bbox for '{field['label']}' "
+                        f"(matched with '{best_match['label']}', "
+                        f"similarity={best_score:.2f})"
+                    )
+
+            # Fallback to fuzzy matching for fields without semantic matches
+            # This handles cases where embedding API fails or threshold not met
             import difflib
 
             for field in fields:
-                field_label_lower = field["label"].lower()
+                if field.get("bbox"):  # Skip if already matched
+                    continue
 
-                # Find best matching bbox by label similarity
+                field_label_lower = field["label"].lower()
                 best_match = None
                 best_score = 0
 
                 for fp in bbox_detection_result["field_positions"]:
                     detected_label_lower = fp["label"].lower()
 
-                    # Calculate similarity score
+                    # Calculate string similarity score
                     score = difflib.SequenceMatcher(
                         None, field_label_lower, detected_label_lower
                     ).ratio()
@@ -1452,7 +1570,7 @@ def ocr_extract_fields(file_bytes: bytes, key_hint: str) -> Dict[str, Any]:
                 if best_match:
                     field["bbox"] = best_match["bbox"]
                     logger.info(
-                        f"Applied bbox for '{field['label']}' "
+                        f"[Fuzzy] Applied bbox for '{field['label']}' "
                         f"(matched with '{best_match['label']}', "
                         f"score={best_score:.2f})"
                     )
