@@ -220,15 +220,26 @@ def _detect_form_fields_opencv(pdf_bytes: bytes) -> Dict[str, Any]:
         logger.info(f"[OpenCV] Extracted {len(text_blocks)} text blocks")
 
         # Match text labels with nearby horizontal lines
+        # Expanded patterns to match more Vietnamese form variants
+        # Use word boundaries (\b) to avoid false positives like "học" matching "ho"
         field_patterns = {
-            "phone": r"(điện thoại|dien thoai|phone|dt|sdt|số điện thoại|so dien thoai)",
-            "email": r"(email|e-mail|thư điện tử|thu dien tu)",
-            "name": r"(họ tên|ho ten|họ và tên|ho va ten|name|fullname|tên|ten)",
-            "dob": r"(ngày sinh|ngay sinh|date of birth|dob|sinh ngày|sinh)",
-            "address": r"(địa chỉ|dia chi|address|nơi ở|noi o|chỗ ở|cho o)",
-            "id_number": r"(cccd|cmnd|căn cước|can cuoc|số cccd|so cccd)",
-            "position": r"(vị trí|vi tri|position|chức vụ|chuc vu)",
-            "department": r"(phòng ban|phong ban|department|bộ phận|bo phan)",
+            "phone": r"\b(điện thoại|dien thoai|phone|sdt|số điện thoại"
+            r"|so dien thoai|di động|di dong|mobile)\b",
+            "email": r"\b(email|e-mail|thư điện tử|thu dien tu)\b",
+            "name": r"\b(họ tên|ho ten|họ và tên|ho va ten|fullname"
+            r"|tên đầy đủ|ten day du)\b",
+            "dob": r"\b(ngày sinh|ngay sinh|date of birth|dob"
+            r"|ngày tháng năm sinh|ngay thang nam sinh|năm sinh|nam sinh)\b",
+            "address": r"\b(địa chỉ|dia chi|address|nơi ở|noi o"
+            r"|địa điểm|dia diem)\b",
+            "id_number": r"\b(cccd|cmnd|căn cước|can cuoc|số cccd|so cccd"
+            r"|số định danh|so dinh danh|hộ chiếu|ho chieu|passport)\b",
+            "position": r"\b(vị trí|vi tri|position|chức vụ|chuc vu)\b",
+            "department": r"\b(phòng ban|phong ban|department" r"|bộ phận|bo phan)\b",
+            "education": r"\b(học vấn|hoc van|trình độ học vấn"
+            r"|trinh do hoc van|bằng cấp|bang cap)\b",
+            "company": r"\b(công ty|cong ty|company|doanh nghiệp"
+            r"|doanh nghiep|nơi làm việc|noi lam viec)\b",
         }
 
         field_positions = []
