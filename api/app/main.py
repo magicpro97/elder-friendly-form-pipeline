@@ -465,14 +465,22 @@ IMPORTANT: Do NOT ask about fields that are already answered or skipped.
         import json
 
         data = json.loads(content)
+        logger.info(f"[generate_next_question] OpenAI response: {data}")
+
         # ensure minimal shape
         if data.get("done"):
             return NextQuestionResponse(done=True)
         nq = data.get("nextQuestion") or {}
+
+        question_text = str(nq.get("text", ""))
+        logger.info(
+            f"[generate_next_question] Generated question text: '{question_text}'"
+        )
+
         return NextQuestionResponse(
             nextQuestion=Question(
                 id=str(nq.get("id")),
-                text=str(nq.get("text")),
+                text=question_text,
                 type=str(nq.get("type", "text")),
                 options=nq.get("options"),
                 required=bool(nq.get("required", True)),
@@ -482,9 +490,14 @@ IMPORTANT: Do NOT ask about fields that are already answered or skipped.
         )
     except Exception as e:
         # Fallback with friendly question generator
-        print(f"OpenAI error: {e}, using friendly fallback")
+        logger.error(
+            f"[generate_next_question] OpenAI error: {e}, using friendly fallback"
+        )
         field = unanswered[0]
         friendly_text = _make_friendly_question(field)
+        logger.info(
+            f"[generate_next_question] Fallback question: '{friendly_text}' for field: {field}"
+        )
         return NextQuestionResponse(
             nextQuestion=Question(
                 id=field["id"],
@@ -511,6 +524,9 @@ async def start_session(
     payload: StartSessionRequest, request: Request, db=Depends(get_db)
 ):
     form = await db.forms.find_one({"id": payload.formId})
+    logger.info(
+        f"[start_session] formId={payload.formId}, fields_count={len(form.get('fields', [])) if form else 0}"
+    )
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
     # capture client info

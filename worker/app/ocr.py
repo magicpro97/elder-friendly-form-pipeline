@@ -465,11 +465,23 @@ def _extract_fields_with_openai(content: str) -> list:
             response_format={"type": "json_object"},
         )
 
+        logger.info(
+            f"OpenAI response object: choices={len(response.choices) if response.choices else 0}"
+        )
+        if response.choices and response.choices[0].message:
+            content_len = (
+                len(response.choices[0].message.content)
+                if response.choices[0].message.content
+                else 0
+            )
+            logger.info(f"OpenAI content length: {content_len}")
+
         if not response.choices or not response.choices[0].message.content:
             logger.warning("OpenAI returned empty response for field extraction")
             return []
 
         result_text = response.choices[0].message.content.strip()
+        logger.info(f"OpenAI raw response: {result_text[:500]}")  # Log first 500 chars
 
         # Parse JSON response
         import json
@@ -486,6 +498,9 @@ def _extract_fields_with_openai(content: str) -> list:
             return []
 
         logger.info(f"OpenAI extracted {len(fields_data)} fields from form")
+        if len(fields_data) > 0:
+            logger.info(f"Sample fields: {fields_data[:3]}")  # Log first 3 fields
+
         return fields_data
 
     except json.JSONDecodeError as e:
@@ -1042,7 +1057,7 @@ def ocr_extract_fields(file_bytes: bytes, key_hint: str) -> Dict[str, Any]:
             content_sample = content[:1000] if len(content) > 1000 else content
 
             response = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5-mini",
                 messages=[
                     {
                         "role": "system",
