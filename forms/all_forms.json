@@ -454,7 +454,7 @@
         "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/10/10-mau-don-xin-thong-tin-dat-dai.doc",
         "original_file_path": "forms/original_files/mau_don_xin_thong_tin_dat_dai/original.doc",
         "file_extension": ".doc",
-        "processed_at": "2025-11-09T02:40:28.813802",
+        "processed_at": "2025-11-10T02:41:58.211983",
         "ocr_confidence": 0.8,
         "ocr_method": "doc_antiword",
         "ocr_keywords": [
@@ -527,7 +527,7 @@
           "label": "fax",
           "type": "string",
           "required": false,
-          "example": "0281234567"
+          "example": "02812345678"
         },
         {
           "name": "email",
@@ -551,7 +551,7 @@
           "example": "Để thực hiện dự án xây dựng"
         },
         {
-          "name": "data_access_method",
+          "name": "data_extraction_method",
           "label": "Hình thức khai thác, sử dụng và phương thức nhận kết quả",
           "type": "string",
           "required": true,
@@ -562,7 +562,7 @@
           "label": "Cam kết sử dụng dữ liệu",
           "type": "multiline",
           "required": true,
-          "example": "Tôi cam đoan không sử dụng dữ liệu trái quy định"
+          "example": "Tôi cam đoan không sử dụng dữ liệu trái với quy định"
         }
       ]
     },
@@ -701,7 +701,7 @@
         "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2020/05/mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
         "original_file_path": "forms/original_files/giay_cam_ket/original.doc",
         "file_extension": ".doc",
-        "processed_at": "2025-11-09T02:39:55.625633",
+        "processed_at": "2025-11-10T02:41:25.556150",
         "ocr_confidence": 0.8,
         "ocr_method": "doc_antiword",
         "ocr_keywords": [
@@ -833,7 +833,7 @@
         "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/11/mau-to-khai-dang-ky-khai-tu.doc",
         "original_file_path": "forms/original_files/to_khai_dang_ky_khai_tu/original.doc",
         "file_extension": ".doc",
-        "processed_at": "2025-11-09T02:39:41.815248",
+        "processed_at": "2025-11-10T02:41:07.312773",
         "ocr_confidence": 0.8,
         "ocr_method": "doc_antiword",
         "ocr_keywords": [
@@ -898,14 +898,14 @@
           "name": "deceased_ethnicity",
           "label": "Dân tộc:",
           "type": "string",
-          "required": true,
+          "required": false,
           "example": "Kinh"
         },
         {
           "name": "deceased_nationality",
           "label": "Quốc tịch:",
           "type": "string",
-          "required": true,
+          "required": false,
           "example": "Việt Nam"
         },
         {
@@ -919,15 +919,15 @@
           "name": "deceased_id_document",
           "label": "Giấy tờ tùy thân:",
           "type": "string",
-          "required": true,
-          "example": "Giấy khai sinh số 123456"
+          "required": false,
+          "example": "Hộ chiếu số 123456789"
         },
         {
           "name": "death_time",
           "label": "Đã chết vào lúc:",
           "type": "string",
           "required": true,
-          "example": "14 giờ 30 phút, ngày 15 tháng 10 năm 2023"
+          "example": "10 giờ 30 phút, ngày 15 tháng 10 năm 2023"
         },
         {
           "name": "place_of_death",
@@ -940,7 +940,7 @@
           "name": "cause_of_death",
           "label": "Nguyên nhân chết:",
           "type": "string",
-          "required": true,
+          "required": false,
           "example": "Bệnh tim"
         },
         {
@@ -960,7 +960,7 @@
         {
           "name": "request_location",
           "label": "Làm tại:",
-          "type": "address",
+          "type": "string",
           "required": true,
           "example": "TP.HCM"
         },
@@ -993,7 +993,7 @@
         "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2015/09/mau-don-phan-to-co-huong-dan-cach-viet-don.docx",
         "original_file_path": "forms/original_files/don_phan_to/original.docx",
         "file_extension": ".docx",
-        "processed_at": "2025-11-09T02:40:12.512536",
+        "processed_at": "2025-11-10T02:41:39.445234",
         "ocr_confidence": 1.0,
         "ocr_method": "docx",
         "ocr_keywords": [
@@ -1031,7 +1031,7 @@
           "label": "Cấp ngày",
           "type": "date",
           "required": true,
-          "example": "01/01/2020"
+          "example": "01/01/2010"
         },
         {
           "name": "id_issue_place",
@@ -1083,25 +1083,11 @@
           "example": "Trình bày tóm tắt lại diễn biến sự việc dẫn tới tranh chấp"
         },
         {
-          "name": "request_1",
-          "label": "Thứ nhất",
-          "type": "string",
+          "name": "request",
+          "label": "YÊU CẦU PHẢN TỐ",
+          "type": "multiline",
           "required": true,
-          "example": "Yêu cầu bồi thường thiệt hại"
-        },
-        {
-          "name": "request_2",
-          "label": "Thứ hai",
-          "type": "string",
-          "required": false,
-          "example": "Yêu cầu xin lỗi công khai"
-        },
-        {
-          "name": "request_3",
-          "label": "Thứ ba",
-          "type": "string",
-          "required": false,
-          "example": "Yêu cầu khôi phục danh dự"
+          "example": "Thứ nhất, yêu cầu bồi thường thiệt hại."
         },
         {
           "name": "document_list",
@@ -1275,5 +1261,5 @@
     "manual": 5,
     "crawler": 6
   },
-  "generated_at": "2025-11-09T02:40:28.953851"
+  "generated_at": "2025-11-10T02:41:58.354307"
 }

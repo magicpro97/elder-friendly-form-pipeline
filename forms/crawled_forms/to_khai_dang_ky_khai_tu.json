@@ -11,7 +11,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/11/mau-to-khai-dang-ky-khai-tu.doc",
     "original_file_path": "forms/original_files/to_khai_dang_ky_khai_tu/original.doc",
     "file_extension": ".doc",
-    "processed_at": "2025-11-09T02:39:41.815248",
+    "processed_at": "2025-11-10T02:41:07.312773",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -76,14 +76,14 @@
       "name": "deceased_ethnicity",
       "label": "Dân tộc:",
       "type": "string",
-      "required": true,
+      "required": false,
       "example": "Kinh"
     },
     {
       "name": "deceased_nationality",
       "label": "Quốc tịch:",
       "type": "string",
-      "required": true,
+      "required": false,
       "example": "Việt Nam"
     },
     {
@@ -97,15 +97,15 @@
       "name": "deceased_id_document",
       "label": "Giấy tờ tùy thân:",
       "type": "string",
-      "required": true,
-      "example": "Giấy khai sinh số 123456"
+      "required": false,
+      "example": "Hộ chiếu số 123456789"
     },
     {
       "name": "death_time",
       "label": "Đã chết vào lúc:",
       "type": "string",
       "required": true,
-      "example": "14 giờ 30 phút, ngày 15 tháng 10 năm 2023"
+      "example": "10 giờ 30 phút, ngày 15 tháng 10 năm 2023"
     },
     {
       "name": "place_of_death",
@@ -118,7 +118,7 @@
       "name": "cause_of_death",
       "label": "Nguyên nhân chết:",
       "type": "string",
-      "required": true,
+      "required": false,
       "example": "Bệnh tim"
     },
     {
@@ -138,7 +138,7 @@
     {
       "name": "request_location",
       "label": "Làm tại:",
-      "type": "address",
+      "type": "string",
       "required": true,
       "example": "TP.HCM"
     },
