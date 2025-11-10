@@ -276,6 +276,56 @@ def _detect_all_input_fields_layout(pdf_bytes: bytes) -> Dict[str, Any]:
 
         logger.info(f"[Layout] Extracted {len(text_blocks)} text blocks")
 
+        # 3.5. Group nearby text blocks into multi-word labels
+        # Field labels are often multiple words: "Tên đầy đủ", "Số điện thoại"
+        grouped_labels = []
+        used_blocks = set()
+
+        for block in text_blocks:
+            if id(block) in used_blocks:
+                continue
+
+            # Find nearby text blocks on same line (within 5px vertical, 100px horizontal)
+            group = [block]
+            used_blocks.add(id(block))
+
+            for other in text_blocks:
+                if id(other) in used_blocks:
+                    continue
+
+                # Same line if Y positions close
+                if abs(block["y"] - other["y"]) < 5:
+                    # Check if horizontally nearby (within 100px)
+                    x_distance = abs(
+                        (block["x"] + block["width"]) - other["x"]
+                    )  # Gap between blocks
+                    if x_distance < 100:
+                        group.append(other)
+                        used_blocks.add(id(other))
+
+            # Sort group by X position (left to right)
+            group.sort(key=lambda b: b["x"])
+
+            # Combine into single label
+            combined_text = " ".join([b["text"] for b in group])
+            avg_conf = sum([b["conf"] for b in group]) / len(group)
+
+            grouped_labels.append(
+                {
+                    "text": combined_text,
+                    "x": min([b["x"] for b in group]),
+                    "y": min([b["y"] for b in group]),
+                    "width": max([b["x"] + b["width"] for b in group])
+                    - min([b["x"] for b in group]),
+                    "height": max([b["height"] for b in group]),
+                    "conf": avg_conf,
+                }
+            )
+
+        logger.info(
+            f"[Layout] Grouped {len(text_blocks)} blocks → {len(grouped_labels)} labels"
+        )
+
         # 4. For each input element, find closest text label
         field_positions = []
 
@@ -288,7 +338,7 @@ def _detect_all_input_fields_layout(pdf_bytes: bytes) -> Dict[str, Any]:
             # Find all candidate labels (above or left)
             candidates = []
 
-            for block in text_blocks:
+            for block in grouped_labels:  # Use grouped labels instead of single blocks
                 # Skip very short text (likely not a label)
                 if len(block["text"]) < 3:
                     continue
