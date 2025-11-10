@@ -345,7 +345,8 @@ def _detect_all_input_fields_layout(pdf_bytes: bytes) -> Dict[str, Any]:
             if id(block) in used_blocks:
                 continue
 
-            # Find nearby text blocks on same line (within 5px vertical, 100px horizontal)
+            # Find nearby text blocks on same line (within 10px vertical, 150px horizontal)
+            # Expanded from 5px/100px to capture more complete labels
             group = [block]
             used_blocks.add(id(block))
 
@@ -353,13 +354,13 @@ def _detect_all_input_fields_layout(pdf_bytes: bytes) -> Dict[str, Any]:
                 if id(other) in used_blocks:
                     continue
 
-                # Same line if Y positions close
-                if abs(block["y"] - other["y"]) < 5:
-                    # Check if horizontally nearby (within 100px)
+                # Same line if Y positions close (expanded tolerance)
+                if abs(block["y"] - other["y"]) < 10:
+                    # Check if horizontally nearby (expanded gap)
                     x_distance = abs(
                         (block["x"] + block["width"]) - other["x"]
                     )  # Gap between blocks
-                    if x_distance < 100:
+                    if x_distance < 150:
                         group.append(other)
                         used_blocks.add(id(other))
 
@@ -368,6 +369,17 @@ def _detect_all_input_fields_layout(pdf_bytes: bytes) -> Dict[str, Any]:
 
             # Combine into single label
             combined_text = " ".join([b["text"] for b in group])
+
+            # Clean up label: remove trailing punctuation
+            combined_text = combined_text.rstrip(",.;:…")
+
+            # Skip if label is too long (likely content, not field label)
+            if len(combined_text) > 50:
+                continue
+
+            # Skip very short text after grouping
+            if len(combined_text) < 3:
+                continue
             avg_conf = sum([b["conf"] for b in group]) / len(group)
 
             grouped_labels.append(
@@ -406,19 +418,20 @@ def _detect_all_input_fields_layout(pdf_bytes: bytes) -> Dict[str, Any]:
                 block_center_x = block["x"] + block["width"] / 2
                 block_center_y = block["y"] + block["height"] / 2
 
-                # Check if text is above or left of input
-                # Above: same X column, Y is above
+                # Prioritize text ABOVE input boxes (most common form layout)
+                # Reduce horizontal search to avoid random text
+                # Above: similar X position, Y is above within 100px
                 is_above = (
-                    abs(block_center_x - elem_center_x) < 300
+                    abs(block_center_x - elem_center_x) < 200  # Reduced from 300
                     and block_center_y < elem_center_y
-                    and elem_center_y - block_center_y < 100
+                    and elem_center_y - block_center_y < 100  # Must be close vertically
                 )
 
-                # Left: same Y row, X is left
+                # Left: same Y row, X is left (less common, stricter)
                 is_left = (
-                    abs(block_center_y - elem_center_y) < 30
+                    abs(block_center_y - elem_center_y) < 20  # Reduced from 30
                     and block_center_x < elem_center_x
-                    and elem_center_x - block_center_x < 400
+                    and elem_center_x - block_center_x < 300  # Reduced from 400
                 )
 
                 if is_above or is_left:
@@ -429,13 +442,17 @@ def _detect_all_input_fields_layout(pdf_bytes: bytes) -> Dict[str, Any]:
                     ) ** 0.5
 
                     # Prioritize labels:
-                    # - Longer text (likely field labels)
-                    # - Text ending with ":" (common label pattern)
-                    # - Higher confidence
+                    # - Text ending with ":" (strongest label indicator)
+                    # - Longer text (likely field labels, not random words)
+                    # - Higher OCR confidence
+                    # - Prefer ABOVE over LEFT (bonus for vertical alignment)
                     priority_score = (
-                        len(block["text"]) * 10  # Favor longer text
-                        + (50 if block["text"].endswith(":") else 0)  # Label indicator
+                        (
+                            100 if block["text"].endswith(":") else 0
+                        )  # Strong label indicator
+                        + len(block["text"]) * 15  # Increased weight for longer text
                         + block["conf"] / 10  # OCR confidence
+                        + (20 if is_above else 0)  # Bonus for above position
                     )
 
                     candidates.append(
@@ -443,15 +460,18 @@ def _detect_all_input_fields_layout(pdf_bytes: bytes) -> Dict[str, Any]:
                             "block": block,
                             "distance": distance,
                             "priority": priority_score,
+                            "position": "above" if is_above else "left",
                         }
                     )
 
             # Choose best candidate: highest priority, then closest distance
             closest_label = None
+            best_position = None
             if candidates:
                 # Sort by priority (high to low), then distance (low to high)
                 candidates.sort(key=lambda c: (-c["priority"], c["distance"]))
                 closest_label = candidates[0]["block"]
+                best_position = candidates[0]["position"]
 
             if closest_label:
                 field_positions.append(
@@ -471,7 +491,7 @@ def _detect_all_input_fields_layout(pdf_bytes: bytes) -> Dict[str, Any]:
                     }
                 )
                 logger.info(
-                    f"[Layout] Field {idx}: '{closest_label['text']}' → "
+                    f"[Layout] Field {idx+1}: '{closest_label['text']}' ({best_position}) → "
                     f"input at ({elem['x']}, {elem['y']})"
                 )
 
