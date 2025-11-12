@@ -11,7 +11,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2020/05/mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
     "original_file_path": "forms/original_files/giay_cam_ket/original.doc",
     "file_extension": ".doc",
-    "processed_at": "2025-11-11T02:42:08.184111",
+    "processed_at": "2025-11-12T02:39:47.947925",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -38,7 +38,7 @@
       "example": "123456789"
     },
     {
-      "name": "issue_date",
+      "name": "id_issue_date",
       "label": "Cấp ngày:",
       "type": "date",
       "required": true,
@@ -84,28 +84,28 @@
       "label": "Thuộc lô, thửa đất số:",
       "type": "string",
       "required": false,
-      "example": "123"
+      "example": "Lô 12"
     },
     {
       "name": "map_sheet_number",
       "label": "Thuộc tờ bản đồ số:",
       "type": "string",
       "required": false,
-      "example": "456"
+      "example": "Tờ 5"
     },
     {
       "name": "usage_time",
       "label": "Thời điểm sử dụng:",
       "type": "date",
       "required": true,
-      "example": "01/01/2021"
+      "example": "01/01/2015"
     },
     {
       "name": "usage_purpose",
       "label": "Mục đích sử dụng:",
       "type": "multiline",
       "required": true,
-      "example": "Ở, kinh doanh"
+      "example": "Xây dựng nhà ở"
     },
     {
       "name": "commitment_reason",
@@ -122,11 +122,18 @@
       "example": "01/01/2023"
     },
     {
-      "name": "signer_name",
+      "name": "applicant_signature",
       "label": "Người làm đơn",
       "type": "string",
       "required": true,
       "example": "Nguyễn Văn A"
+    },
+    {
+      "name": "chairman_signature",
+      "label": "TM. UBND (PHƯỜNG, XÃ, THỊ TRẤN) CHỦ TỊCH",
+      "type": "string",
+      "required": false,
+      "example": "Trần Văn B"
     }
   ]
 }
