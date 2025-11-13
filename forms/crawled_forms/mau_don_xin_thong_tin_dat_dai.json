@@ -12,7 +12,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/10/10-mau-don-xin-thong-tin-dat-dai.doc",
     "original_file_path": "forms/original_files/mau_don_xin_thong_tin_dat_dai/original.doc",
     "file_extension": ".doc",
-    "processed_at": "2025-11-12T02:40:25.621200",
+    "processed_at": "2025-11-13T02:40:58.542721",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -71,7 +71,7 @@
       "label": "Địa chỉ",
       "type": "address",
       "required": true,
-      "example": "Số 1, Đường ABC, Quận 1, TP. HCM"
+      "example": "123 Đường ABC, Phường XYZ, Quận 1"
     },
     {
       "name": "phone",
@@ -85,7 +85,7 @@
       "label": "fax",
       "type": "string",
       "required": false,
-      "example": "02812345678"
+      "example": "012345678"
     },
     {
       "name": "email",
@@ -116,7 +116,7 @@
       "example": "Nhận tại nơi cung cấp"
     },
     {
-      "name": "commitment",
+      "name": "data_usage_commitment",
       "label": "Cam kết sử dụng dữ liệu",
       "type": "multiline",
       "required": true,

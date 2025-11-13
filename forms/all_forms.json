@@ -454,7 +454,7 @@
         "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/10/10-mau-don-xin-thong-tin-dat-dai.doc",
         "original_file_path": "forms/original_files/mau_don_xin_thong_tin_dat_dai/original.doc",
         "file_extension": ".doc",
-        "processed_at": "2025-11-12T02:40:25.621200",
+        "processed_at": "2025-11-13T02:40:58.542721",
         "ocr_confidence": 0.8,
         "ocr_method": "doc_antiword",
         "ocr_keywords": [
@@ -513,7 +513,7 @@
           "label": "Địa chỉ",
           "type": "address",
           "required": true,
-          "example": "Số 1, Đường ABC, Quận 1, TP. HCM"
+          "example": "123 Đường ABC, Phường XYZ, Quận 1"
         },
         {
           "name": "phone",
@@ -527,7 +527,7 @@
           "label": "fax",
           "type": "string",
           "required": false,
-          "example": "02812345678"
+          "example": "012345678"
         },
         {
           "name": "email",
@@ -558,7 +558,7 @@
           "example": "Nhận tại nơi cung cấp"
         },
         {
-          "name": "commitment",
+          "name": "data_usage_commitment",
           "label": "Cam kết sử dụng dữ liệu",
           "type": "multiline",
           "required": true,
@@ -701,7 +701,7 @@
         "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2020/05/mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
         "original_file_path": "forms/original_files/giay_cam_ket/original.doc",
         "file_extension": ".doc",
-        "processed_at": "2025-11-12T02:39:47.947925",
+        "processed_at": "2025-11-13T02:40:27.599628",
         "ocr_confidence": 0.8,
         "ocr_method": "doc_antiword",
         "ocr_keywords": [
@@ -774,28 +774,28 @@
           "label": "Thuộc lô, thửa đất số:",
           "type": "string",
           "required": false,
-          "example": "Lô 12"
+          "example": "123"
         },
         {
           "name": "map_sheet_number",
           "label": "Thuộc tờ bản đồ số:",
           "type": "string",
           "required": false,
-          "example": "Tờ 5"
+          "example": "456"
         },
         {
           "name": "usage_time",
           "label": "Thời điểm sử dụng:",
           "type": "date",
           "required": true,
-          "example": "01/01/2015"
+          "example": "01/01/2021"
         },
         {
           "name": "usage_purpose",
           "label": "Mục đích sử dụng:",
           "type": "multiline",
           "required": true,
-          "example": "Xây dựng nhà ở"
+          "example": "Ở, kinh doanh"
         },
         {
           "name": "commitment_reason",
@@ -805,13 +805,6 @@
           "example": "Không có tranh chấp"
         },
         {
-          "name": "date_signed",
-          "label": "Ngày…....tháng….... năm............",
-          "type": "date",
-          "required": true,
-          "example": "01/01/2023"
-        },
-        {
           "name": "applicant_signature",
           "label": "Người làm đơn",
           "type": "string",
@@ -819,11 +812,11 @@
           "example": "Nguyễn Văn A"
         },
         {
-          "name": "chairman_signature",
-          "label": "TM. UBND (PHƯỜNG, XÃ, THỊ TRẤN) CHỦ TỊCH",
-          "type": "string",
-          "required": false,
-          "example": "Trần Văn B"
+          "name": "date_signed",
+          "label": "Ngày…....tháng….... năm............",
+          "type": "date",
+          "required": true,
+          "example": "01/01/2023"
         }
       ]
     },
@@ -840,7 +833,7 @@
         "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/11/mau-to-khai-dang-ky-khai-tu.doc",
         "original_file_path": "forms/original_files/to_khai_dang_ky_khai_tu/original.doc",
         "file_extension": ".doc",
-        "processed_at": "2025-11-12T02:39:21.587612",
+        "processed_at": "2025-11-13T02:40:10.277809",
         "ocr_confidence": 0.8,
         "ocr_method": "doc_antiword",
         "ocr_keywords": [
@@ -878,7 +871,7 @@
           "label": "Quan hệ với người đã chết:",
           "type": "string",
           "required": true,
-          "example": "Cha"
+          "example": "Chồng"
         },
         {
           "name": "deceased_full_name",
@@ -934,7 +927,7 @@
           "label": "Đã chết vào lúc:",
           "type": "string",
           "required": true,
-          "example": "14 giờ 30 phút, ngày 01 tháng 01 năm 2023"
+          "example": "14 giờ 30 phút, ngày 01 tháng 10 năm 2023"
         },
         {
           "name": "place_of_death",
@@ -976,7 +969,7 @@
           "label": "ngày tháng năm:",
           "type": "date",
           "required": true,
-          "example": "20/10/2023"
+          "example": "01/11/2023"
         },
         {
           "name": "requester_signature",
@@ -1000,7 +993,7 @@
         "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2015/09/mau-don-phan-to-co-huong-dan-cach-viet-don.docx",
         "original_file_path": "forms/original_files/don_phan_to/original.docx",
         "file_extension": ".docx",
-        "processed_at": "2025-11-12T02:40:11.397632",
+        "processed_at": "2025-11-13T02:40:44.469480",
         "ocr_confidence": 1.0,
         "ocr_method": "docx",
         "ocr_keywords": [
@@ -1052,7 +1045,7 @@
           "label": "Địa chỉ",
           "type": "address",
           "required": true,
-          "example": "123 Đường ABC, Quận 1, TP. HCM"
+          "example": "123 Đường ABC, Quận 1, TP.HCM"
         },
         {
           "name": "phone",
@@ -1080,14 +1073,14 @@
           "label": "Nguyên đơn",
           "type": "string",
           "required": true,
-          "example": "Ông/Bà Trần Văn B"
+          "example": "Trần Thị B"
         },
         {
           "name": "dispute_summary",
           "label": "NỘI DUNG PHẢN TỐ",
           "type": "multiline",
           "required": true,
-          "example": "Tóm tắt diễn biến sự việc..."
+          "example": "Tóm tắt sự việc dẫn tới tranh chấp..."
         },
         {
           "name": "request_1",
@@ -1111,11 +1104,11 @@
           "example": "Yêu cầu khôi phục danh dự"
         },
         {
-          "name": "document_list",
-          "label": "Danh mục tài liệu, chứng cứ kèm theo",
+          "name": "documents",
+          "label": "Danh mục tài liệu, chúng cứ kèm theo (nếu có)",
           "type": "multiline",
           "required": false,
-          "example": "Giấy tờ liên quan đến vụ án..."
+          "example": "Giấy tờ liên quan đến vụ án"
         }
       ]
     },
@@ -1282,5 +1275,5 @@
     "manual": 5,
     "crawler": 6
   },
-  "generated_at": "2025-11-12T02:40:25.788153"
+  "generated_at": "2025-11-13T02:40:58.671378"
 }
