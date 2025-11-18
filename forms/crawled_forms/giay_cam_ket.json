@@ -11,7 +11,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2020/05/mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
     "original_file_path": "forms/original_files/giay_cam_ket/original.doc",
     "file_extension": ".doc",
-    "processed_at": "2025-11-17T02:41:57.728460",
+    "processed_at": "2025-11-18T02:39:31.103653",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -25,129 +25,108 @@
   "fields": [
     {
       "name": "full_name",
-      "label": "Tôi tên",
+      "label": "Tôi tên:",
       "type": "string",
       "required": true,
       "example": "Nguyễn Văn A"
     },
     {
       "name": "id_number",
-      "label": "CMND số",
+      "label": "CMND số:",
       "type": "string",
       "required": true,
       "example": "123456789"
     },
     {
       "name": "issue_date",
-      "label": "Cấp ngày",
+      "label": "Cấp ngày:",
       "type": "date",
       "required": true,
       "example": "01/01/2020"
     },
     {
       "name": "permanent_address",
-      "label": "Địa chỉ thường trú",
+      "label": "Địa chỉ thường trú:",
       "type": "address",
       "required": true,
       "example": "123 Đường ABC"
     },
     {
       "name": "ward",
-      "label": "Phường (xã, thị trấn)",
+      "label": "Phường (xã, thị trấn):",
       "type": "string",
       "required": true,
       "example": "Phường 1"
     },
     {
       "name": "district",
-      "label": "Quận (huyện)",
+      "label": "Quận (huyện):",
       "type": "string",
       "required": true,
       "example": "Quận 1"
     },
     {
       "name": "land_address",
-      "label": "địa chỉ",
+      "label": "Xin tường trình về nguồn gốc sử dụng nhà, đất tại địa chỉ:",
       "type": "address",
       "required": true,
       "example": "456 Đường XYZ"
     },
     {
-      "name": "land_ward",
-      "label": "phường (xã, thị trấn)",
-      "type": "string",
-      "required": true,
-      "example": "Phường 2"
-    },
-    {
-      "name": "land_district",
-      "label": "quận (huyện)",
-      "type": "string",
-      "required": true,
-      "example": "Quận 2"
-    },
-    {
       "name": "land_area",
-      "label": "Có diện tích",
+      "label": "Có diện tích:",
       "type": "string",
       "required": true,
       "example": "100m2"
     },
     {
       "name": "land_plot_number",
-      "label": "Thuộc lô, thửa đất số",
+      "label": "Thuộc lô, thửa đất số:",
       "type": "string",
       "required": false,
       "example": "123"
     },
     {
       "name": "map_sheet_number",
-      "label": "Thuộc tờ bản đồ số",
+      "label": "Thuộc tờ bản đồ số:",
       "type": "string",
       "required": false,
       "example": "456"
     },
     {
       "name": "usage_time",
-      "label": "Thời điểm sử dụng",
+      "label": "Thời điểm sử dụng:",
       "type": "date",
       "required": true,
       "example": "01/01/2021"
     },
     {
       "name": "usage_purpose",
-      "label": "Mục đích sử dụng",
+      "label": "Mục đích sử dụng:",
       "type": "multiline",
       "required": true,
       "example": "Ở, kinh doanh"
     },
     {
       "name": "commitment_reason",
-      "label": "Lý do xin cam kết",
+      "label": "Lý do xin cam kết:",
       "type": "multiline",
       "required": true,
       "example": "Không có tranh chấp"
     },
     {
-      "name": "submission_date",
+      "name": "date_signed",
       "label": "Ngày…....tháng….... năm............",
       "type": "date",
       "required": true,
       "example": "01/01/2023"
     },
     {
-      "name": "applicant_signature",
+      "name": "signer_name",
       "label": "Người làm đơn",
       "type": "string",
       "required": true,
       "example": "Nguyễn Văn A"
-    },
-    {
-      "name": "authority_signature",
-      "label": "TM. UBND (PHƯỜNG, XÃ, THỊ TRẤN) CHỦ TỊCH",
-      "type": "string",
-      "required": true,
-      "example": "Trần Văn B"
     }
   ]
 }
