@@ -12,7 +12,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/10/10-mau-don-xin-thong-tin-dat-dai.doc",
     "original_file_path": "forms/original_files/mau_don_xin_thong_tin_dat_dai/original.doc",
     "file_extension": ".doc",
-    "processed_at": "2025-11-19T02:40:02.150102",
+    "processed_at": "2025-11-20T02:39:53.991573",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -106,10 +106,10 @@
       "label": "Mục đích sử dụng dữ liệu",
       "type": "multiline",
       "required": true,
-      "example": "Để thực hiện dự án xây dựng"
+      "example": "Để phục vụ cho việc xây dựng dự án"
     },
     {
-      "name": "data_access_method",
+      "name": "data_extraction_method",
       "label": "Hình thức khai thác, sử dụng và phương thức nhận kết quả",
       "type": "string",
       "required": true,
@@ -120,7 +120,7 @@
       "label": "Cam kết sử dụng dữ liệu",
       "type": "multiline",
       "required": true,
-      "example": "Tôi cam đoan không sử dụng dữ liệu trái quy định"
+      "example": "Tôi cam đoan không sử dụng dữ liệu được cung cấp trái với quy định của pháp luật."
     }
   ]
 }
