@@ -11,7 +11,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2020/05/mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
     "original_file_path": "forms/original_files/giay_cam_ket/original.doc",
     "file_extension": ".doc",
-    "processed_at": "2025-11-20T02:39:16.996846",
+    "processed_at": "2025-11-21T02:37:06.766347",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -115,14 +115,14 @@
       "example": "Không có tranh chấp"
     },
     {
-      "name": "date_signed",
+      "name": "submission_date",
       "label": "Ngày…....tháng….... năm............",
       "type": "date",
       "required": true,
       "example": "01/01/2023"
     },
     {
-      "name": "signer_name",
+      "name": "applicant_signature",
       "label": "Người làm đơn",
       "type": "string",
       "required": true,
