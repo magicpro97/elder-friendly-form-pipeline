@@ -12,7 +12,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/10/10-mau-don-xin-thong-tin-dat-dai.doc",
     "original_file_path": "forms/original_files/mau_don_xin_thong_tin_dat_dai/original.doc",
     "file_extension": ".doc",
-    "processed_at": "2025-11-21T02:37:41.689891",
+    "processed_at": "2025-11-22T02:40:49.532311",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -71,7 +71,7 @@
       "label": "Địa chỉ",
       "type": "address",
       "required": true,
-      "example": "Số 10, Đường ABC, Quận 1, TP. HCM"
+      "example": "Số 1, Đường ABC, Quận 1, TP. HCM"
     },
     {
       "name": "phone",
@@ -102,25 +102,32 @@
       "example": "123"
     },
     {
-      "name": "data_request_purpose",
+      "name": "land_address",
+      "label": "địa chỉ",
+      "type": "string",
+      "required": true,
+      "example": "Đường XYZ, Quận 2, TP. HCM"
+    },
+    {
+      "name": "data_purpose",
       "label": "Mục đích sử dụng dữ liệu",
       "type": "multiline",
       "required": true,
-      "example": "Để phục vụ cho việc xin cấp giấy chứng nhận quyền sử dụng đất."
+      "example": "Để thực hiện dự án đầu tư"
     },
     {
-      "name": "data_extraction_method",
+      "name": "data_access_method",
       "label": "Hình thức khai thác, sử dụng và phương thức nhận kết quả",
       "type": "string",
       "required": true,
       "example": "Nhận tại nơi cung cấp"
     },
     {
-      "name": "data_usage_commitment",
+      "name": "data_commitment",
       "label": "Cam kết sử dụng dữ liệu",
       "type": "multiline",
       "required": true,
-      "example": "Tôi cam đoan không sử dụng dữ liệu được cung cấp trái với quy định của pháp luật."
+      "example": "Tôi cam đoan không sử dụng dữ liệu trái quy định"
     }
   ]
 }
