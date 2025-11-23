@@ -11,7 +11,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/11/mau-to-khai-dang-ky-khai-tu.doc",
     "original_file_path": "forms/original_files/to_khai_dang_ky_khai_tu/original.doc",
     "file_extension": ".doc",
-    "processed_at": "2025-11-22T02:39:58.331274",
+    "processed_at": "2025-11-23T02:49:56.187566",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -35,14 +35,14 @@
       "label": "Nơi cư trú:",
       "type": "address",
       "required": true,
-      "example": "123 Đường ABC, Phường XYZ, Quận 1, TP.HCM"
+      "example": "123 Đường ABC, Phường XYZ, Quận 1, TP. HCM"
     },
     {
       "name": "requester_id_document",
       "label": "Giấy tờ tùy thân",
       "type": "string",
       "required": true,
-      "example": "Chứng minh nhân dân số 001089123"
+      "example": "CMND số 001234567 do Công an TP. HCM cấp"
     },
     {
       "name": "relationship_to_deceased",
@@ -76,14 +76,14 @@
       "name": "deceased_ethnicity",
       "label": "Dân tộc:",
       "type": "string",
-      "required": false,
+      "required": true,
       "example": "Kinh"
     },
     {
       "name": "deceased_nationality",
       "label": "Quốc tịch:",
       "type": "string",
-      "required": false,
+      "required": true,
       "example": "Việt Nam"
     },
     {
@@ -91,21 +91,21 @@
       "label": "Nơi cư trú cuối cùng:",
       "type": "address",
       "required": true,
-      "example": "456 Đường DEF, Phường UVW, Quận 2, TP.HCM"
+      "example": "456 Đường DEF, Phường UVW, Quận 2, TP. HCM"
     },
     {
       "name": "deceased_id_document",
       "label": "Giấy tờ tùy thân:",
       "type": "string",
       "required": true,
-      "example": "Giấy chứng tử số 123456"
+      "example": "Giấy khai sinh số 123456"
     },
     {
       "name": "death_time",
       "label": "Đã chết vào lúc:",
       "type": "string",
       "required": true,
-      "example": "14 giờ 30 phút, ngày 15 tháng 10 năm 2023"
+      "example": "14 giờ 30 phút, ngày 01 tháng 01 năm 2023"
     },
     {
       "name": "place_of_death",
@@ -118,7 +118,7 @@
       "name": "cause_of_death",
       "label": "Nguyên nhân chết:",
       "type": "string",
-      "required": false,
+      "required": true,
       "example": "Bệnh tim"
     },
     {
@@ -140,7 +140,7 @@
       "label": "Làm tại:",
       "type": "address",
       "required": true,
-      "example": "TP.HCM"
+      "example": "TP. HCM"
     },
     {
       "name": "request_date",

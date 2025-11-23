@@ -11,7 +11,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2020/05/mau-giay-cam-ket-khong-co-tranh-chap-dat-dai.doc",
     "original_file_path": "forms/original_files/giay_cam_ket/original.doc",
     "file_extension": ".doc",
-    "processed_at": "2025-11-22T02:40:15.951887",
+    "processed_at": "2025-11-23T02:50:16.807093",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -45,7 +45,7 @@
       "example": "01/01/2020"
     },
     {
-      "name": "address",
+      "name": "permanent_address",
       "label": "Địa chỉ thường trú:",
       "type": "address",
       "required": true,
@@ -122,18 +122,11 @@
       "example": "01/01/2023"
     },
     {
-      "name": "applicant_signature",
+      "name": "signer_name",
       "label": "Người làm đơn",
       "type": "string",
       "required": true,
       "example": "Nguyễn Văn A"
-    },
-    {
-      "name": "chairman_signature",
-      "label": "TM. UBND (PHƯỜNG, XÃ, THỊ TRẤN) CHỦ TỊCH",
-      "type": "string",
-      "required": false,
-      "example": "Trần Văn B"
     }
   ]
 }
