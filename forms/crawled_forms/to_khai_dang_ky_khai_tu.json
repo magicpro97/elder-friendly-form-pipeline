@@ -11,7 +11,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/11/mau-to-khai-dang-ky-khai-tu.doc",
     "original_file_path": "forms/original_files/to_khai_dang_ky_khai_tu/original.doc",
     "file_extension": ".doc",
-    "processed_at": "2025-11-24T02:41:58.670239",
+    "processed_at": "2025-11-25T02:39:25.650204",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -35,7 +35,7 @@
       "label": "Nơi cư trú:",
       "type": "address",
       "required": true,
-      "example": "123 Đường ABC, Phường XYZ, Quận 1, TP. HCM"
+      "example": "123 Đường ABC, Phường XYZ, Quận 1, TP.HCM"
     },
     {
       "name": "requester_id_document",
@@ -76,14 +76,14 @@
       "name": "deceased_ethnicity",
       "label": "Dân tộc:",
       "type": "string",
-      "required": true,
+      "required": false,
       "example": "Kinh"
     },
     {
       "name": "deceased_nationality",
       "label": "Quốc tịch:",
       "type": "string",
-      "required": true,
+      "required": false,
       "example": "Việt Nam"
     },
     {
@@ -91,13 +91,13 @@
       "label": "Nơi cư trú cuối cùng:",
       "type": "address",
       "required": true,
-      "example": "456 Đường DEF, Phường UVW, Quận 2, TP. HCM"
+      "example": "456 Đường DEF, Phường UVW, Quận 2, TP.HCM"
     },
     {
       "name": "deceased_id_document",
       "label": "Giấy tờ tùy thân:",
       "type": "string",
-      "required": true,
+      "required": false,
       "example": "Giấy chứng tử số 123456"
     },
     {
@@ -118,7 +118,7 @@
       "name": "cause_of_death",
       "label": "Nguyên nhân chết:",
       "type": "string",
-      "required": true,
+      "required": false,
       "example": "Bệnh tim"
     },
     {
@@ -136,14 +136,14 @@
       "example": "20/10/2023"
     },
     {
-      "name": "declaration_location",
+      "name": "request_location",
       "label": "Làm tại:",
       "type": "address",
       "required": true,
-      "example": "TP. HCM"
+      "example": "TP.HCM"
     },
     {
-      "name": "declaration_date",
+      "name": "request_date",
       "label": "ngày tháng năm:",
       "type": "date",
       "required": true,
