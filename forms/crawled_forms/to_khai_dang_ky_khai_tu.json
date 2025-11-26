@@ -11,7 +11,7 @@
     "source_url": "https://luatsubaoho.com/phapluat/wp-content/uploads/2018/11/mau-to-khai-dang-ky-khai-tu.doc",
     "original_file_path": "forms/original_files/to_khai_dang_ky_khai_tu/original.doc",
     "file_extension": ".doc",
-    "processed_at": "2025-11-25T02:39:25.650204",
+    "processed_at": "2025-11-26T02:40:52.732060",
     "ocr_confidence": 0.8,
     "ocr_method": "doc_antiword",
     "ocr_keywords": [
@@ -76,14 +76,14 @@
       "name": "deceased_ethnicity",
       "label": "Dân tộc:",
       "type": "string",
-      "required": false,
+      "required": true,
       "example": "Kinh"
     },
     {
       "name": "deceased_nationality",
       "label": "Quốc tịch:",
       "type": "string",
-      "required": false,
+      "required": true,
       "example": "Việt Nam"
     },
     {
@@ -97,7 +97,7 @@
       "name": "deceased_id_document",
       "label": "Giấy tờ tùy thân:",
       "type": "string",
-      "required": false,
+      "required": true,
       "example": "Giấy chứng tử số 123456"
     },
     {
@@ -118,7 +118,7 @@
       "name": "cause_of_death",
       "label": "Nguyên nhân chết:",
       "type": "string",
-      "required": false,
+      "required": true,
       "example": "Bệnh tim"
     },
     {
